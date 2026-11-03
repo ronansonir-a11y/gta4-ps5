@@ -223,7 +223,9 @@ string(APPEND _PS4_CXX_ISYSTEM " -isystem ${OO_PS4_TOOLCHAIN}/include")
 # _LIBCPP_HAS_MUSL_LIBC / _LIBCPP_HAS_THREAD_API_PTHREAD /
 # _LIBCPP_PROVIDES_DEFAULT_RUNE_TABLE are set by our __config_site overlay.
 # [ps4 pro] AMD Jaguar (btver2), not the PS5's Zen 2 and not Sandy Bridge.
-set(_PS4_DEFINES "-D__ORBIS__ -D_GNU_SOURCE -U__FreeBSD__ -march=btver2")
+# -D_REENTRANT/-D_THREAD_SAFE are what SDL3 and other vendored POSIX code
+# expect for a pthread-enabled target; Orbis provides pthreads inside libkernel.
+set(_PS4_DEFINES "-D__ORBIS__ -D_GNU_SOURCE -D_REENTRANT -D_THREAD_SAFE -U__FreeBSD__ -march=btver2")
 
 # Suppress default includes and set our explicit ordered paths
 # Modern clang may define wchar_t via stddef.h before OpenOrbis musl headers,
