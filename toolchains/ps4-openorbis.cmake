@@ -151,12 +151,12 @@ include_directories(SYSTEM "${OO_PS4_TOOLCHAIN}/include")
 link_directories("${OO_PS4_TOOLCHAIN}/lib")
 
 # Build include paths for cross-compilation.
-# Order: PS4 config/compat shims → clang builtins → SDK C headers (musl)
-#        → modern host libc++ (C++23).  The libc++ *archive* still comes from
-#        the OpenOrbis SDK; only the headers are modern.  musl must precede the
-#        host libc++ wrappers so <math.h>/<stdlib.h> resolve to Orbis C headers.
-#        The old Homebrew-only lookup made Ubuntu CI use a non-existent
-#        /include/c++/v1.
+# Order: PS4 config/compat shims → modern host libc++ (C++23) → clang builtins
+#        → SDK C headers (musl).  The libc++ *archive* still comes from the
+#        OpenOrbis SDK; only the headers are modern.  A repo-local math.h shim
+#        in the compat dir resolves the one C header that cannot use libc++'s
+#        wrapper (see toolchains/ps4/include/math.h).  The old Homebrew-only
+#        lookup made Ubuntu CI use a non-existent /include/c++/v1.
 get_filename_component(_CLANG_PREFIX "${CLANG_PATH}/../.." ABSOLUTE)
 execute_process(
     COMMAND "${CLANG_PATH}" -print-resource-dir
@@ -166,33 +166,25 @@ execute_process(
 set(_PS4_C_ISYSTEM "")
 set(_PS4_CXX_ISYSTEM "")
 
-# 0) Repo-local PS4 __config_site overlay + xlocale.h shim.  The overlay uses
-#    #include_next to inherit the host's generated __config_site, then forces
-#    the musl/pthread settings.  Keep it before the host libc++ headers.
+# 0) Repo-local PS4 __config_site overlay + xlocale.h/math.h shims.  The
+#    __config_site overlay uses #include_next to inherit the host's generated
+#    __config_site, then forces the musl/pthread settings.  math.h bypasses the
+#    host libc++ wrapper, whose global `using std::__math::isinf/isnan`
+#    declarations conflict with the SDK's static-inline isinf/isnan.  Keep this
+#    directory before the host libc++ headers so the shims win.
 set(_PS4_COMPAT_INCLUDE "${CMAKE_CURRENT_LIST_DIR}/ps4")
+if(NOT EXISTS "${_PS4_COMPAT_INCLUDE}/include/math.h")
+    message(FATAL_ERROR
+        "PS4: toolchains/ps4/include/math.h compatibility shim is missing; "
+        "host libc++ math.h conflicts with the OpenOrbis SDK")
+endif()
 if(EXISTS "${_PS4_COMPAT_INCLUDE}/libcxx-include/__config_site")
     string(APPEND _PS4_CXX_ISYSTEM " -isystem ${_PS4_COMPAT_INCLUDE}/libcxx-include")
 endif()
 string(APPEND _PS4_C_ISYSTEM   " -isystem ${_PS4_COMPAT_INCLUDE}/include")
 string(APPEND _PS4_CXX_ISYSTEM " -isystem ${_PS4_COMPAT_INCLUDE}/include")
 
-# 1) Clang builtins (stddef.h, stdint.h, etc.) — keep these ahead of the SDK's
-#    musl stddef.h so clang's wchar_t/stddef definitions win.
-if(_CLANG_RESOURCE_DIR)
-    string(APPEND _PS4_C_ISYSTEM   " -isystem ${_CLANG_RESOURCE_DIR}/include")
-    string(APPEND _PS4_CXX_ISYSTEM " -isystem ${_CLANG_RESOURCE_DIR}/include")
-endif()
-
-# 2) OpenOrbis SDK C headers (musl: math.h, string.h, stdio.h, pthread.h, …).
-#    These MUST come before the host libc++ headers: host libc++'s <math.h>
-#    wrapper ends with `using std::__math::isinf/isnan;` which conflicts with
-#    musl's static-inline global isinf/isnan.  With the SDK first, <cmath>
-#    pulls in musl math.h directly and the wrapper is never reached.  The SDK
-#    has no top-level vector/__config_site, so C++ headers still resolve to 3).
-string(APPEND _PS4_C_ISYSTEM   " -isystem ${OO_PS4_TOOLCHAIN}/include")
-string(APPEND _PS4_CXX_ISYSTEM " -isystem ${OO_PS4_TOOLCHAIN}/include")
-
-# 3) Modern host libc++ headers.  CI installs libc++-18-dev; Homebrew LLVM and
+# 1) Modern host libc++ headers.  CI installs libc++-18-dev; Homebrew LLVM and
 #    explicit -DLIBERTY_PS4_HOST_LIBCXX_INCLUDE=... remain supported.
 set(LIBERTY_PS4_HOST_LIBCXX_INCLUDE "" CACHE PATH
     "Directory containing host libc++ C++23 headers (…/include/c++/v1)")
@@ -222,6 +214,15 @@ if(NOT EXISTS "${LIBERTY_PS4_HOST_LIBCXX_INCLUDE}/vector")
 endif()
 string(APPEND _PS4_CXX_ISYSTEM " -isystem ${LIBERTY_PS4_HOST_LIBCXX_INCLUDE}")
 message(STATUS "PS4: Using host libc++ headers from ${LIBERTY_PS4_HOST_LIBCXX_INCLUDE}")
+
+# 2) Clang builtins (stddef.h, stdint.h, etc.)
+if(_CLANG_RESOURCE_DIR)
+    string(APPEND _PS4_C_ISYSTEM   " -isystem ${_CLANG_RESOURCE_DIR}/include")
+    string(APPEND _PS4_CXX_ISYSTEM " -isystem ${_CLANG_RESOURCE_DIR}/include")
+endif()
+# 3) OpenOrbis SDK C headers (musl: string.h, stdio.h, pthread.h, etc.)
+string(APPEND _PS4_C_ISYSTEM   " -isystem ${OO_PS4_TOOLCHAIN}/include")
+string(APPEND _PS4_CXX_ISYSTEM " -isystem ${OO_PS4_TOOLCHAIN}/include")
 
 # _GNU_SOURCE enables all POSIX extensions in musl (nanosleep, localtime_r,
 # locale_t, uselocale, fileno, fsync, tm_gmtoff, etc.) that libc++ requires.
