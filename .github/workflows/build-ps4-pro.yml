@@ -21,14 +21,29 @@ name: Build PS4 Pro (OpenOrbis / Neo / 1080p)
   push:
     paths:
       - ".github/workflows/build-ps4-pro.yml"
+      - "CMakeLists.txt"
       - "CMakePresets.json"
+      - "LibertyRecomp/**"
+      - "glue/rexglue-sdk-main/**"
       - "toolchains/ps4-openorbis.cmake"
       - "toolchains/ps4/**"
       - "tools/ps4/**"
-      - "cmake/DependencyPatches.cmake"
+      - "tools/setup_repo.py"
+      - "cmake/**"
+      - ".gitmodules"
   pull_request:
     paths:
       - ".github/workflows/build-ps4-pro.yml"
+      - "CMakeLists.txt"
+      - "CMakePresets.json"
+      - "LibertyRecomp/**"
+      - "glue/rexglue-sdk-main/**"
+      - "toolchains/ps4-openorbis.cmake"
+      - "toolchains/ps4/**"
+      - "tools/ps4/**"
+      - "tools/setup_repo.py"
+      - "cmake/**"
+      - ".gitmodules"
 
 permissions:
   contents: read
