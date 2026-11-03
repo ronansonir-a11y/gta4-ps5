@@ -138,13 +138,15 @@ jobs:
           # the glue/ submodules and three XenosRecomp submodules, and it
           # applies ffmpeg-ps5.patch (incompatible with ffmpeg-ps4.patch).
           # The PS4 configure requires the full pinned list checked by
-          # cmake/DependencyPatches.cmake, plus plume/msdf-atlas-gen and all
+          # cmake/DependencyPatches.cmake, plus plume/msdf-atlas-gen, the
+          # root imgui/implot sources compiled into LibertyRecomp, and all
           # XenosRecomp nested submodules.  Patches come from the reviewed
           # manifest via setup_repo.py --prepare-only.
           mapfile -t rex_deps < <(git config --file .gitmodules --get-regexp '^submodule\..*\.path$' \
             | awk '$2 ~ /^glue\/rexglue-sdk-main\/thirdparty\// {print $2}')
           git -c submodule.recurse=false submodule update --init --depth 1 --jobs 4 \
-            "${rex_deps[@]}" tools/XenosRecomp thirdparty/msdf-atlas-gen thirdparty/plume
+            "${rex_deps[@]}" tools/XenosRecomp thirdparty/msdf-atlas-gen thirdparty/plume \
+            thirdparty/imgui thirdparty/implot
           git -C tools/XenosRecomp submodule update --init --recursive --depth 1 --jobs 4
           git -C thirdparty/msdf-atlas-gen submodule update --init --recursive --depth 1 --jobs 4
           git -C thirdparty/plume submodule update --init --recursive --depth 1 --jobs 4
