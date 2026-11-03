@@ -12,6 +12,8 @@
 // Disable warnings about unused parameters for kernel functions
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 
+#include <rex/platform.h>
+
 #include <algorithm>
 #include <array>
 #include <chrono>
