@@ -14,7 +14,9 @@
 
 #include <rex/platform/dynlib.h>
 
-#if REX_PLATFORM_MAC
+#if REX_PLATFORM_MAC || REX_PLATFORM_PS4
+// The vendored RenderDoc app API header has no macOS/Orbis platform branch,
+// and RenderDoc is not available on PS4. Keep the type opaque on both.
 struct RENDERDOC_API_1_0_0;
 #else
 #include <renderdoc_app.h>
