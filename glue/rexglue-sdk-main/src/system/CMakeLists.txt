@@ -53,7 +53,10 @@ set(REXSYSTEM_SOURCES
 )
 
 # [ps5 port] one static app on the PS5 (no shared libraries of our own).
-if(PS5)
+# [ps4 pro] OpenOrbis links a single eboot.bin; a host-linked librexruntime.so
+# would pull in FreeBSD crti/crtbegin/-lgcc objects that the PS4 toolchain does
+# not provide, so build the runtime as a static archive here too.
+if(PS5 OR PS4)
     add_library(rexruntime STATIC ${REXSYSTEM_SOURCES})
 else()
     add_library(rexruntime SHARED ${REXSYSTEM_SOURCES})
