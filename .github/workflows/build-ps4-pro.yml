@@ -1,7 +1,8 @@
 name: Build PS4 Pro (OpenOrbis / Neo / 1080p)
 
-# This workflow assumes the ps4-pro.patch from this change set is committed.
-# It builds eboot.bin + sce_sys/param.sfo WITHOUT the 7 GB Xbox 360 payload.
+# Builds eboot.bin + sce_sys/param.sfo (Neo bit 23) + an installable PKG,
+# without the ~7 GB Xbox 360 payload: the real game files are read from
+# LIBERTY_PS4_GAME_ROOT on the console at runtime.
 "on":
   workflow_dispatch:
     inputs:
@@ -22,10 +23,15 @@ name: Build PS4 Pro (OpenOrbis / Neo / 1080p)
       - ".github/workflows/build-ps4-pro.yml"
       - "CMakePresets.json"
       - "toolchains/ps4-openorbis.cmake"
-      - "tools/ps4/sfo_neo.py"
+      - "toolchains/ps4/**"
+      - "tools/ps4/**"
+      - "cmake/DependencyPatches.cmake"
   pull_request:
     paths:
       - ".github/workflows/build-ps4-pro.yml"
+
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -42,9 +48,17 @@ jobs:
 
       - name: Host toolchain (clang/lld/ninja/CMake >= 3.29)
         run: |
+          set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             clang lld llvm ninja-build python3 python3-pip git unzip wget ca-certificates
+          # C++23 headers for the PS4 cross-build (the SDK's libc++ archive is
+          # from 2021 and has no <expected>/<ranges> etc.).
+          if apt-cache show libc++-18-dev >/dev/null 2>&1; then
+            sudo apt-get install -y --no-install-recommends libc++-18-dev libc++abi-18-dev
+          else
+            sudo apt-get install -y --no-install-recommends libc++-dev libc++abi-dev
+          fi
           python3 -m pip install --user --upgrade "cmake==3.31.6"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           cmake --version
@@ -79,8 +93,38 @@ jobs:
           printf '#!/bin/sh\nexec ld.lld "$@"\n' > tools/OpenOrbis-PS4-Toolchain/bin/orbis-ld
           chmod +x tools/OpenOrbis-PS4-Toolchain/bin/orbis-ld
 
-      - name: Fetch third-party submodules (setup.sh, no game data)
-        run: ./setup.sh
+      - name: Inspect OpenOrbis SDK layout
+        run: |
+          set -euo pipefail
+          echo "clang: $(clang --version | head -1)"
+          echo "clang++ resource dir: $(clang++ -print-resource-dir)"
+          echo "host libc++ headers:"
+          find /usr /opt -path '*/include/c++/v1/vector' -print 2>/dev/null | head -10 || true
+          echo "SDK bin/linux:"
+          ls -la "$OO_PS4_TOOLCHAIN/bin/linux"
+          echo "SDK libc++ headers / config sites:"
+          find "$OO_PS4_TOOLCHAIN/include" -maxdepth 4 \( -name '__config_site' -o -name 'vector' \) -print | head -20 || true
+          echo "SDK libraries:"
+          find "$OO_PS4_TOOLCHAIN/lib" -maxdepth 1 -type f -printf '%f\n' | sort | head -60
+
+      - name: Fetch pinned dependency sources (PS4 / OpenOrbis)
+        run: |
+          set -euo pipefail
+          # setup.sh is the PS5/RADV bootstrap: it intentionally fetches only
+          # the glue/ submodules and three XenosRecomp submodules, and it
+          # applies ffmpeg-ps5.patch (incompatible with ffmpeg-ps4.patch).
+          # The PS4 configure requires the full pinned list checked by
+          # cmake/DependencyPatches.cmake, plus plume/msdf-atlas-gen and all
+          # XenosRecomp nested submodules.  Patches come from the reviewed
+          # manifest via setup_repo.py --prepare-only.
+          mapfile -t rex_deps < <(git config --file .gitmodules --get-regexp '^submodule\..*\.path$' \
+            | awk '$2 ~ /^glue\/rexglue-sdk-main\/thirdparty\// {print $2}')
+          git -c submodule.recurse=false submodule update --init --depth 1 --jobs 4 \
+            "${rex_deps[@]}" tools/XenosRecomp thirdparty/msdf-atlas-gen thirdparty/plume
+          git -C tools/XenosRecomp submodule update --init --recursive --depth 1 --jobs 4
+          git -C thirdparty/msdf-atlas-gen submodule update --init --recursive --depth 1 --jobs 4
+          git -C thirdparty/plume submodule update --init --recursive --depth 1 --jobs 4
+          python3 tools/setup_repo.py --prepare-only
 
       - name: Configure (ps4-pro-release)
         run: |

@@ -152,11 +152,11 @@ include_directories(SYSTEM "${OO_PS4_TOOLCHAIN}/include")
 link_directories("${OO_PS4_TOOLCHAIN}/lib")
 
 # Build include paths for cross-compilation.
-# Order: Homebrew libc++ (C++23 features) → clang builtins → SDK C headers (musl).
-# We use Homebrew's modern libc++ for C++23 support (std::bit_cast, etc.)
-# The SDK-bundled libc++ is too old (~LLVM 10). We provide an xlocale.h shim
-# and enable _GNU_SOURCE so musl exposes the POSIX APIs libc++ needs.
-get_filename_component(_BREW_LLVM_DIR "${CLANG_PATH}/../.." ABSOLUTE)
+# Order: PS4 config/compat shims → modern host libc++ (C++23) → clang builtins
+#        → SDK C headers (musl).  The libc++ *archive* still comes from the
+#        OpenOrbis SDK; only the headers are modern.  The old Homebrew-only
+#        lookup made Ubuntu CI use a non-existent /include/c++/v1.
+get_filename_component(_CLANG_PREFIX "${CLANG_PATH}/../.." ABSOLUTE)
 execute_process(
     COMMAND "${CLANG_PATH}" -print-resource-dir
     OUTPUT_VARIABLE _CLANG_RESOURCE_DIR
@@ -164,12 +164,48 @@ execute_process(
 )
 set(_PS4_C_ISYSTEM "")
 set(_PS4_CXX_ISYSTEM "")
-# Only C++ compilations should see libc++ headers.
-# 0) PS4 __config_site overlay (shadows Homebrew's to override musl/pthread settings)
-string(APPEND _PS4_CXX_ISYSTEM " -isystem ${OO_PS4_TOOLCHAIN}/include/c++/v1")
-# 1) Homebrew libc++ C++ stdlib headers (modern, C++23 capable)
-string(APPEND _PS4_CXX_ISYSTEM " -isystem ${_BREW_LLVM_DIR}/include/c++/v1")
-message(STATUS "PS4: Using Homebrew libc++ headers from ${_BREW_LLVM_DIR}")
+
+# 0) Repo-local PS4 __config_site overlay + xlocale.h shim.  The overlay uses
+#    #include_next to inherit the host's generated __config_site, then forces
+#    the musl/pthread settings.  Keep it before the host libc++ headers.
+set(_PS4_COMPAT_INCLUDE "${CMAKE_CURRENT_LIST_DIR}/ps4")
+if(EXISTS "${_PS4_COMPAT_INCLUDE}/libcxx-include/__config_site")
+    string(APPEND _PS4_CXX_ISYSTEM " -isystem ${_PS4_COMPAT_INCLUDE}/libcxx-include")
+endif()
+string(APPEND _PS4_C_ISYSTEM   " -isystem ${_PS4_COMPAT_INCLUDE}/include")
+string(APPEND _PS4_CXX_ISYSTEM " -isystem ${_PS4_COMPAT_INCLUDE}/include")
+
+# 1) Modern host libc++ headers.  CI installs libc++-18-dev; Homebrew LLVM and
+#    explicit -DLIBERTY_PS4_HOST_LIBCXX_INCLUDE=... remain supported.
+set(LIBERTY_PS4_HOST_LIBCXX_INCLUDE "" CACHE PATH
+    "Directory containing host libc++ C++23 headers (…/include/c++/v1)")
+if(NOT LIBERTY_PS4_HOST_LIBCXX_INCLUDE)
+    set(_PS4_LIBCXX_CANDIDATES
+        "${_CLANG_PREFIX}/include/c++/v1"
+        "${_CLANG_RESOURCE_DIR}/include/c++/v1"
+        "/usr/lib/llvm-18/include/c++/v1"
+        "/usr/lib/llvm-19/include/c++/v1"
+        "/usr/lib/llvm-20/include/c++/v1"
+        "/usr/include/c++/v1"
+        "/usr/local/include/c++/v1"
+        "/opt/homebrew/opt/llvm/include/c++/v1"
+        "/usr/local/opt/llvm/include/c++/v1")
+    foreach(_candidate IN LISTS _PS4_LIBCXX_CANDIDATES)
+        if(EXISTS "${_candidate}/vector" AND EXISTS "${_candidate}/__config")
+            set(LIBERTY_PS4_HOST_LIBCXX_INCLUDE "${_candidate}" CACHE PATH "" FORCE)
+            break()
+        endif()
+    endforeach()
+endif()
+if(NOT EXISTS "${LIBERTY_PS4_HOST_LIBCXX_INCLUDE}/vector")
+    message(FATAL_ERROR
+        "PS4: modern host libc++ headers not found. Install libc++-18-dev "
+        "(Ubuntu) / llvm (Homebrew), or pass "
+        "-DLIBERTY_PS4_HOST_LIBCXX_INCLUDE=/path/to/include/c++/v1")
+endif()
+string(APPEND _PS4_CXX_ISYSTEM " -isystem ${LIBERTY_PS4_HOST_LIBCXX_INCLUDE}")
+message(STATUS "PS4: Using host libc++ headers from ${LIBERTY_PS4_HOST_LIBCXX_INCLUDE}")
+
 # 2) Clang builtins (stddef.h, stdint.h, etc.)
 if(_CLANG_RESOURCE_DIR)
     string(APPEND _PS4_C_ISYSTEM   " -isystem ${_CLANG_RESOURCE_DIR}/include")
@@ -179,19 +215,15 @@ endif()
 string(APPEND _PS4_C_ISYSTEM   " -isystem ${OO_PS4_TOOLCHAIN}/include")
 string(APPEND _PS4_CXX_ISYSTEM " -isystem ${OO_PS4_TOOLCHAIN}/include")
 
-message(STATUS "PS4: Using Homebrew LLVM from ${_BREW_LLVM_DIR}")
-
 # _GNU_SOURCE enables all POSIX extensions in musl (nanosleep, localtime_r,
 # locale_t, uselocale, fileno, fsync, tm_gmtoff, etc.) that libc++ requires.
 # -U__FreeBSD__: PS4 is FreeBSD-based but we use musl headers, not FreeBSD libc.
 #   Without this, libc++ selects the FreeBSD locale backend which needs
 #   strtoll_l, snprintf_l, asprintf_l, etc. that musl doesn't provide.
-# _LIBCPP_PROVIDES_DEFAULT_RUNE_TABLE: provides generic ctype bitmasks
-#   instead of platform-specific _CTYPE_* / _IS* constants.
-# Note: _LIBCPP_HAS_MUSL_LIBC and _LIBCPP_HAS_THREAD_API_PTHREAD are set
-# via the __config_site overlay in include/c++/v1/__config_site.
+# _LIBCPP_HAS_MUSL_LIBC / _LIBCPP_HAS_THREAD_API_PTHREAD /
+# _LIBCPP_PROVIDES_DEFAULT_RUNE_TABLE are set by our __config_site overlay.
 # [ps4 pro] AMD Jaguar (btver2), not the PS5's Zen 2 and not Sandy Bridge.
-set(_PS4_DEFINES "-D__ORBIS__ -D_GNU_SOURCE -U__FreeBSD__ -D_LIBCPP_PROVIDES_DEFAULT_RUNE_TABLE -march=btver2")
+set(_PS4_DEFINES "-D__ORBIS__ -D_GNU_SOURCE -U__FreeBSD__ -march=btver2")
 
 # Suppress default includes and set our explicit ordered paths
 # Modern clang may define wchar_t via stddef.h before OpenOrbis musl headers,
