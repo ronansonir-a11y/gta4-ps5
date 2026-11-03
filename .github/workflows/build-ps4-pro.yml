@@ -106,6 +106,18 @@ jobs:
           find "$OO_PS4_TOOLCHAIN/include" -maxdepth 4 \( -name '__config_site' -o -name 'vector' \) -print | head -20 || true
           echo "SDK libraries:"
           find "$OO_PS4_TOOLCHAIN/lib" -maxdepth 1 -type f -printf '%f\n' | sort | head -60
+          echo "PKG prerequisites:"
+          for f in samples/hello_world/sce_module/libSceFios2.prx \
+                   samples/hello_world/sce_module/libc.prx \
+                   src/modules/right.sprx \
+                   lib/crt1.o lib/libc++.a lib/libc++abi.a lib/libunwind.a \
+                   lib/libc.a lib/libkernel.a lib/libclang_rt.builtins-x86_64.a; do
+            if test -e "$OO_PS4_TOOLCHAIN/$f"; then
+              echo "OK      $f"
+            else
+              echo "MISSING $f"
+            fi
+          done
 
       - name: Fetch pinned dependency sources (PS4 / OpenOrbis)
         run: |
@@ -128,9 +140,11 @@ jobs:
 
       - name: Configure (ps4-pro-release)
         run: |
+          # Push / PR events have no `inputs` context, so default to the PS4 Pro
+          # profile (payload skipped, Neo enabled) for every non-dispatch run.
           cmake --preset ps4-pro-release \
-            -DLIBERTY_RECOMP_SKIP_GAME_PAYLOAD=${{ inputs.skip_game_payload == false && 'OFF' || 'ON' }} \
-            -DLIBERTY_PS4_NEO_MODE=${{ inputs.neo_mode == false && 'OFF' || 'ON' }} \
+            -DLIBERTY_RECOMP_SKIP_GAME_PAYLOAD=${{ (github.event_name != 'workflow_dispatch' || inputs.skip_game_payload) && 'ON' || 'OFF' }} \
+            -DLIBERTY_PS4_NEO_MODE=${{ (github.event_name != 'workflow_dispatch' || inputs.neo_mode) && 'ON' || 'OFF' }} \
             -DLIBERTY_PS4_GAME_ROOT="${{ inputs.ps4_game_root || '/data/gta4' }}" \
             -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 
@@ -139,12 +153,13 @@ jobs:
 
       - name: Build sce_sys/param.sfo (Neo ATTRIBUTE bit 23)
         run: |
+          set -euo pipefail
           cmake --build out/build/ps4-pro-release --target LibertyRecomp-sfo -j 2
           python3 tools/ps4/sfo_neo.py inspect \
-            out/build/ps4-pro-release/pkg_staging/sce_sys/param.sfo
+            out/build/ps4-pro-release/pkg_staging/sce_sys/param.sfo | tee /tmp/sfo_inspect.txt
+          grep -q 'Neo bit 23 = SET' /tmp/sfo_inspect.txt
 
-      - name: Optional PKG (requires create-gp4 + PkgTool.Core)
-        continue-on-error: true
+      - name: Build installable PKG (create-gp4 + PkgTool.Core)
         run: cmake --build out/build/ps4-pro-release --target LibertyRecomp-pkg -j 2
 
       - name: Collect artefacts
@@ -154,13 +169,17 @@ jobs:
           cp out/build/ps4-pro-release/LibertyRecomp/eboot.bin artefacts/ 2>/dev/null || \
             find out/build/ps4-pro-release -name eboot.bin -exec cp {} artefacts/ \; -quit
           cp out/build/ps4-pro-release/pkg_staging/sce_sys/param.sfo artefacts/sce_sys/
+          pkg_path=$(find out/build/ps4-pro-release -name '*.pkg' -type f -print -quit)
+          test -n "$pkg_path"
+          cp "$pkg_path" artefacts/
           ls -lh artefacts artefacts/sce_sys
           test -s artefacts/eboot.bin
           test -s artefacts/sce_sys/param.sfo
+          test -n "$(find artefacts -maxdepth 1 -name '*.pkg' -size +0c -print -quit)"
 
-      - name: Upload eboot.bin + param.sfo
+      - name: Upload eboot.bin + param.sfo + PKG
         uses: actions/upload-artifact@v4
         with:
-          name: gta4-ps4-pro-eboot
+          name: gta4-ps4-pro-package
           path: artefacts/
           if-no-files-found: error

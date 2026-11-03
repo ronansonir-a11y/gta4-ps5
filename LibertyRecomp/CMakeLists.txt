@@ -1132,67 +1132,24 @@ else()
         # Prefer OpenOrbis's bundled make_param_sfo.py (portable, pure Python).
         # Fall back to PkgTool.Core sfo_new/sfo_setentry if the script is gone.
         set(LIBERTY_PS4_PARAM_SFO "${LIBERTY_PS4_SCE_SYS_DIR}/param.sfo")
-        if (Python3_Interpreter_FOUND AND EXISTS "${LIBERTY_PS4_SFO_PY}")
-            add_custom_command(
-                OUTPUT  "${LIBERTY_PS4_PARAM_SFO}"
-                DEPENDS "${LIBERTY_PS4_SFO_PY}" "${LIBERTY_PS4_NP_CONF_H}"
-                COMMAND ${CMAKE_COMMAND} -E make_directory "${LIBERTY_PS4_SCE_SYS_DIR}"
-                COMMAND ${Python3_EXECUTABLE} "${LIBERTY_PS4_SFO_PY}"
-                    "${LIBERTY_PS4_PARAM_SFO}"
-                    "${LIBERTY_PS4_TITLE_ID}"
-                    "${LIBERTY_PS4_CONTENT_ID}"
-                    "${LIBERTY_PS4_TITLE_STR}"
-                    "${LIBERTY_PS4_VERSION}"
-                COMMAND ${Python3_EXECUTABLE} "${LIBERTY_PS4_SFO_HELPER}" patch
-                    "${LIBERTY_PS4_PARAM_SFO}" --attribute ${LIBERTY_PS4_ATTRIBUTE_VALUE}
-                    --title-id "${LIBERTY_PS4_TITLE_ID}" --content-id "${LIBERTY_PS4_CONTENT_ID}"
-                    --title "${LIBERTY_PS4_TITLE_STR}" --version "${LIBERTY_PS4_VERSION}"
-                    --category "${LIBERTY_PS4_CATEGORY}"
-                COMMENT "PS4: Generating sce_sys/param.sfo (make_param_sfo.py + Neo bit)"
-                VERBATIM
-            )
-        elseif (LIBERTY_PS4_PKGTOOL)
-            add_custom_command(
-                OUTPUT  "${LIBERTY_PS4_PARAM_SFO}"
-                DEPENDS "${LIBERTY_PS4_NP_CONF_H}"
-                COMMAND ${CMAKE_COMMAND} -E make_directory "${LIBERTY_PS4_SCE_SYS_DIR}"
-                COMMAND "${LIBERTY_PS4_PKGTOOL}" sfo_new             "${LIBERTY_PS4_PARAM_SFO}"
-                COMMAND "${LIBERTY_PS4_PKGTOOL}" sfo_setentry "${LIBERTY_PS4_PARAM_SFO}" APP_TYPE           --type Integer --maxsize 4   --value 1
-                COMMAND "${LIBERTY_PS4_PKGTOOL}" sfo_setentry "${LIBERTY_PS4_PARAM_SFO}" APP_VER            --type Utf8    --maxsize 8   --value "${LIBERTY_PS4_VERSION}"
-                COMMAND "${LIBERTY_PS4_PKGTOOL}" sfo_setentry "${LIBERTY_PS4_PARAM_SFO}" ATTRIBUTE          --type Integer --maxsize 4   --value ${LIBERTY_PS4_ATTRIBUTE_VALUE}
-                COMMAND "${LIBERTY_PS4_PKGTOOL}" sfo_setentry "${LIBERTY_PS4_PARAM_SFO}" CATEGORY           --type Utf8    --maxsize 4   --value "${LIBERTY_PS4_CATEGORY}"
-                COMMAND "${LIBERTY_PS4_PKGTOOL}" sfo_setentry "${LIBERTY_PS4_PARAM_SFO}" CONTENT_ID         --type Utf8    --maxsize 48  --value "${LIBERTY_PS4_CONTENT_ID}"
-                COMMAND "${LIBERTY_PS4_PKGTOOL}" sfo_setentry "${LIBERTY_PS4_PARAM_SFO}" DOWNLOAD_DATA_SIZE --type Integer --maxsize 4   --value 0
-                COMMAND "${LIBERTY_PS4_PKGTOOL}" sfo_setentry "${LIBERTY_PS4_PARAM_SFO}" SYSTEM_VER         --type Integer --maxsize 4   --value 0
-                COMMAND "${LIBERTY_PS4_PKGTOOL}" sfo_setentry "${LIBERTY_PS4_PARAM_SFO}" TITLE              --type Utf8    --maxsize 128 --value "${LIBERTY_PS4_TITLE_STR}"
-                COMMAND "${LIBERTY_PS4_PKGTOOL}" sfo_setentry "${LIBERTY_PS4_PARAM_SFO}" TITLE_ID           --type Utf8    --maxsize 12  --value "${LIBERTY_PS4_TITLE_ID}"
-                COMMAND "${LIBERTY_PS4_PKGTOOL}" sfo_setentry "${LIBERTY_PS4_PARAM_SFO}" VERSION            --type Utf8    --maxsize 8   --value "${LIBERTY_PS4_VERSION}"
-                COMMAND ${Python3_EXECUTABLE} "${LIBERTY_PS4_SFO_HELPER}" patch
-                    "${LIBERTY_PS4_PARAM_SFO}" --attribute ${LIBERTY_PS4_ATTRIBUTE_VALUE}
-                    --title-id "${LIBERTY_PS4_TITLE_ID}" --content-id "${LIBERTY_PS4_CONTENT_ID}"
-                    --title "${LIBERTY_PS4_TITLE_STR}" --version "${LIBERTY_PS4_VERSION}"
-                    --category "${LIBERTY_PS4_CATEGORY}"
-                COMMENT "PS4: Generating sce_sys/param.sfo (PkgTool.Core + Neo bit)"
-                VERBATIM
-            )
-        else()
-            # [ps4 pro] Stock OpenOrbis has no make_param_sfo.py and no
-            # PkgTool.Core binary in the repo checkout. Generate a real SFO
-            # (including the Neo ATTRIBUTE bit) with our own helper instead of
-            # writing a useless placeholder file.
-            find_package(Python3 COMPONENTS Interpreter QUIET)
-            add_custom_command(
-                OUTPUT  "${LIBERTY_PS4_PARAM_SFO}"
-                COMMAND ${CMAKE_COMMAND} -E make_directory "${LIBERTY_PS4_SCE_SYS_DIR}"
-                COMMAND ${Python3_EXECUTABLE} "${LIBERTY_PS4_SFO_HELPER}" create
-                    "${LIBERTY_PS4_PARAM_SFO}" --attribute ${LIBERTY_PS4_ATTRIBUTE_VALUE}
-                    --title-id "${LIBERTY_PS4_TITLE_ID}" --content-id "${LIBERTY_PS4_CONTENT_ID}"
-                    --title "${LIBERTY_PS4_TITLE_STR}" --version "${LIBERTY_PS4_VERSION}"
-                    --category "${LIBERTY_PS4_CATEGORY}"
-                COMMENT "PS4: Generating sce_sys/param.sfo (sfo_neo.py, Neo=${LIBERTY_PS4_NEO_MODE})"
-                VERBATIM
-            )
-        endif()
+        # [ps4 pro] Stock OpenOrbis v0.5.3 has no scripts/make_param_sfo.py,
+        # and PkgTool.Core's sfo_new/sfo_setentry CLI is an unnecessary .NET
+        # dependency.  sfo_neo.py is self-contained: it writes a real PSF from
+        # scratch with the exact ATTRIBUTE value (bit 23 when Neo is on); the
+        # `patch` subcommand remains available for third-party SFO files.
+        find_package(Python3 COMPONENTS Interpreter REQUIRED)
+        add_custom_command(
+            OUTPUT  "${LIBERTY_PS4_PARAM_SFO}"
+            DEPENDS "${LIBERTY_PS4_SFO_HELPER}" "${LIBERTY_PS4_NP_CONF_H}"
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${LIBERTY_PS4_SCE_SYS_DIR}"
+            COMMAND ${Python3_EXECUTABLE} "${LIBERTY_PS4_SFO_HELPER}" create
+                "${LIBERTY_PS4_PARAM_SFO}" --attribute ${LIBERTY_PS4_ATTRIBUTE_VALUE}
+                --title-id "${LIBERTY_PS4_TITLE_ID}" --content-id "${LIBERTY_PS4_CONTENT_ID}"
+                --title "${LIBERTY_PS4_TITLE_STR}" --version "${LIBERTY_PS4_VERSION}"
+                --category "${LIBERTY_PS4_CATEGORY}"
+            COMMENT "PS4: Generating sce_sys/param.sfo (sfo_neo.py, Neo=${LIBERTY_PS4_NEO_MODE})"
+            VERBATIM
+        )
 
         add_custom_target(LibertyRecomp-sfo
             DEPENDS "${LIBERTY_PS4_PARAM_SFO}"
@@ -1303,11 +1260,15 @@ else()
         endif()
 
         # ── Full PKG build target ─────────────────────────────────────────────
-        # Depends on LibertyRecomp-sfo + LibertyRecomp-trp so param.sfo and
-        # trophy00.trp are guaranteed present before the .gp4 / pkg_build step.
+        # Depends on LibertyRecomp-sfo so param.sfo is present before the .gp4
+        # / pkg_build step.  Trophy packs are optional for homebrew PKGs.
         if (LIBERTY_PS4_CREATE_GP4 AND LIBERTY_PS4_PKGTOOL)
+            # Trophy packs are optional for a homebrew PKG: OpenOrbis v0.5.3
+            # ships no create-trp and this tree supplies no create_trp.py.
+            # Keep LibertyRecomp-trp available for developers with a real
+            # trophy packer, but do not make the CI PKG depend on it.
             add_custom_target(LibertyRecomp-pkg
-                DEPENDS LibertyRecomp LibertyRecomp-sfo LibertyRecomp-trp
+                DEPENDS LibertyRecomp LibertyRecomp-sfo
                 WORKING_DIRECTORY "${LIBERTY_PS4_PKG_STAGING}"
 
                 # Ensure staging dirs exist
@@ -1406,8 +1367,12 @@ else()
                 "enable the LibertyRecomp-pkg target. The LibertyRecomp-sfo and "
                 "LibertyRecomp-trp targets remain available independently.")
             # Fallback: basic staging only (no .pkg produced)
+            # Trophy packs are optional for a homebrew PKG: OpenOrbis v0.5.3
+            # ships no create-trp and this tree supplies no create_trp.py.
+            # Keep LibertyRecomp-trp available for developers with a real
+            # trophy packer, but do not make the CI PKG depend on it.
             add_custom_target(LibertyRecomp-pkg
-                DEPENDS LibertyRecomp LibertyRecomp-sfo LibertyRecomp-trp
+                DEPENDS LibertyRecomp LibertyRecomp-sfo
                 COMMAND ${CMAKE_COMMAND} -E make_directory "${LIBERTY_PS4_PKG_STAGING}/game"
                 COMMAND ${CMAKE_COMMAND} -E make_directory "${LIBERTY_PS4_PKG_STAGING}/sce_module"
                 # Stage OpenOrbis system PRXes (libSceFios2 + libc) — see
