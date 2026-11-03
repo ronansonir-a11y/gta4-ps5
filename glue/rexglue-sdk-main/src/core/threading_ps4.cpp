@@ -1200,7 +1200,7 @@ class PosixTimer : public PosixConditionHandle<Timer> {
   }
   bool SetOnceAt(WClock_::time_point due_time,
                  std::function<void()> opt_callback = nullptr) override {
-    return SetOnceAt(rex::chrono::clock_cast<GClock_, WClock_>(due_time), std::move(opt_callback));
+    return SetOnceAt(std::chrono::clock_cast<GClock_>(due_time), std::move(opt_callback));
   };
   bool SetOnceAt(GClock_::time_point due_time,
                  std::function<void()> opt_callback = nullptr) override {
@@ -1214,7 +1214,7 @@ class PosixTimer : public PosixConditionHandle<Timer> {
   }
   bool SetRepeatingAt(WClock_::time_point due_time, std::chrono::milliseconds period,
                       std::function<void()> opt_callback = nullptr) override {
-    return SetRepeatingAt(rex::chrono::clock_cast<GClock_, WClock_>(due_time), period,
+    return SetRepeatingAt(std::chrono::clock_cast<GClock_>(due_time), period,
                           std::move(opt_callback));
   }
   bool SetRepeatingAt(GClock_::time_point due_time, std::chrono::milliseconds period,
