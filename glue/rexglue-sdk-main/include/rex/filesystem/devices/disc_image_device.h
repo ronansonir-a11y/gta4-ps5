@@ -17,12 +17,15 @@
 
 #include <rex/filesystem/device.h>
 #include <rex/memory/mapped_memory.h>
+#include <rex/platform.h>
 
 namespace rex::filesystem {
 
+#if REX_PLATFORM_PS5
 namespace direct {
 class Reader;
 }
+#endif
 class DiscImageEntry;
 
 class DiscImageDevice : public Device {
@@ -74,7 +77,10 @@ class DiscImageDevice : public Device {
   std::filesystem::path host_path_;
   std::unique_ptr<Entry> root_entry_;
   std::unique_ptr<memory::MappedMemory> mmap_;
-  std::unique_ptr<direct::Reader> reader_;  // [ps5 port] the image, read past the cache (never mapped)
+#if REX_PLATFORM_PS5
+  // [ps5 port] the image is read past the cache and never mapped.
+  std::unique_ptr<direct::Reader> reader_;
+#endif
   size_t host_size_ = 0;
   DiscInfo disc_info_{};
   uint64_t file_count_ = 0;
