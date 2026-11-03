@@ -30,6 +30,7 @@ name: Build PS4 Pro (OpenOrbis / Neo / 1080p)
       - "tools/ps4/**"
       - "tools/setup_repo.py"
       - "cmake/**"
+      - "thirdparty/**"
       - ".gitmodules"
   pull_request:
     paths:
@@ -43,6 +44,7 @@ name: Build PS4 Pro (OpenOrbis / Neo / 1080p)
       - "tools/ps4/**"
       - "tools/setup_repo.py"
       - "cmake/**"
+      - "thirdparty/**"
       - ".gitmodules"
 
 permissions:
