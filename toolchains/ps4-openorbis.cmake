@@ -154,9 +154,10 @@ link_directories("${OO_PS4_TOOLCHAIN}/lib")
 # Order: PS4 config/compat shims → modern host libc++ (C++23) → clang builtins
 #        → SDK C headers (musl).  The libc++ *archive* still comes from the
 #        OpenOrbis SDK; only the headers are modern.  A repo-local math.h shim
-#        in the compat dir resolves the one C header that cannot use libc++'s
-#        wrapper (see toolchains/ps4/include/math.h).  The old Homebrew-only
-#        lookup made Ubuntu CI use a non-existent /include/c++/v1.
+#        in the compat dir renames the SDK's isinf/isnan definitions, then
+#        delegates to libc++'s wrapper (see toolchains/ps4/include/math.h).
+#        The old Homebrew-only lookup made Ubuntu CI use a non-existent
+#        /include/c++/v1.
 get_filename_component(_CLANG_PREFIX "${CLANG_PATH}/../.." ABSOLUTE)
 execute_process(
     COMMAND "${CLANG_PATH}" -print-resource-dir
@@ -168,9 +169,9 @@ set(_PS4_CXX_ISYSTEM "")
 
 # 0) Repo-local PS4 __config_site overlay + xlocale.h/math.h shims.  The
 #    __config_site overlay uses #include_next to inherit the host's generated
-#    __config_site, then forces the musl/pthread settings.  math.h bypasses the
-#    host libc++ wrapper, whose global `using std::__math::isinf/isnan`
-#    declarations conflict with the SDK's static-inline isinf/isnan.  Keep this
+#    __config_site, then forces the musl/pthread settings.  math.h renames the
+#    SDK's isinf/isnan static inlines before delegating to the host libc++
+#    wrapper, whose preferred overloads otherwise collide with them.  Keep this
 #    directory before the host libc++ headers so the shims win.
 set(_PS4_COMPAT_INCLUDE "${CMAKE_CURRENT_LIST_DIR}/ps4")
 if(NOT EXISTS "${_PS4_COMPAT_INCLUDE}/include/math.h")

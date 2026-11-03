@@ -1,21 +1,29 @@
 #pragma once
 /* PS4 / OpenOrbis <math.h> compatibility shim.
  *
- * The PS4 build compiles C++23 sources against modern host libc++ headers but
- * links the OpenOrbis SDK's static libc++.  Host libc++'s own math.h wrapper
- * ends with global `using std::__math::isinf/isnan;` declarations; those
- * conflict with the static-inline global isinf/isnan supplied by the SDK's
- * musl math.h.  Keeping the SDK C headers ahead of libc++ instead breaks every
- * other libc++ C wrapper (cstddef/cstdint/cctype/...), so only math.h is
- * shadowed here.
+ * The PS4 build uses modern host libc++ headers (C++23) with the OpenOrbis SDK
+ * C library.  Host libc++'s math.h wrapper adds global
+ * `using std::__math::isinf/isnan;` declarations; the SDK's C++ math.h defines
+ * static-inline global isinf/isnan returning int, while libc++'s preferred
+ * overloads return bool with the same signatures.  Those cannot coexist.
  *
- * This header is placed before the host libc++ headers via -isystem.  We claim
- * libc++'s _LIBCPP_MATH_H guard so <cmath>'s "didn't find libc++'s math.h"
- * check passes, then include the Orbis C header directly by relative path.  Do
- * not use #include_next here: that would re-enter the host wrapper.
+ * In C++ mode we rename the SDK's two conflicting static-inline functions
+ * before including the Orbis header, then hand off to libc++'s own math.h
+ * wrapper via #include_next.  The wrapper still supplies all std::__math
+ * functions, includes <stdlib.h> (so <cmath>/<cstdlib> see the same ::abs
+ * overload set) and defines _LIBCPP_MATH_H for <cmath>.  In C mode the SDK's
+ * classification macros are left untouched and the wrapper is a no-op.
  */
-#ifndef _LIBCPP_MATH_H
-#  define _LIBCPP_MATH_H
+#ifdef __cplusplus
+#  define isinf   __ps4_sdk_isinf
+#  define isnan   __ps4_sdk_isnan
 #endif
 
 #include "../../../tools/OpenOrbis-PS4-Toolchain/include/math.h"
+
+#ifdef __cplusplus
+#  undef isinf
+#  undef isnan
+#endif
+
+#include_next <math.h>
