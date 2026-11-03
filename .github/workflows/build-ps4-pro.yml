@@ -99,13 +99,23 @@ jobs:
           echo "clang: $(clang --version | head -1)"
           echo "clang++ resource dir: $(clang++ -print-resource-dir)"
           echo "host libc++ headers:"
-          find /usr /opt -path '*/include/c++/v1/vector' -print 2>/dev/null | head -10 || true
+          for d in /usr/lib/llvm-18/include/c++/v1 /usr/lib/llvm-19/include/c++/v1 \
+                   /usr/include/c++/v1 /opt/homebrew/opt/llvm/include/c++/v1 \
+                   /usr/local/opt/llvm/include/c++/v1; do
+            test -f "$d/vector" && echo "$d/vector" || true
+          done
           echo "SDK bin/linux:"
           ls -la "$OO_PS4_TOOLCHAIN/bin/linux"
           echo "SDK libc++ headers / config sites:"
-          find "$OO_PS4_TOOLCHAIN/include" -maxdepth 4 \( -name '__config_site' -o -name 'vector' \) -print | head -20 || true
-          echo "SDK libraries:"
-          find "$OO_PS4_TOOLCHAIN/lib" -maxdepth 1 -type f -printf '%f\n' | sort | head -60
+          for f in "$OO_PS4_TOOLCHAIN/include/c++/v1/vector" \
+                   "$OO_PS4_TOOLCHAIN/include/c++/v1/__config_site" \
+                   "$OO_PS4_TOOLCHAIN/include/c++/v1/__config"; do
+            test -e "$f" && echo "$f" || true
+          done
+          echo "SDK libraries (first 60):"
+          find "$OO_PS4_TOOLCHAIN/lib" -maxdepth 1 -type f -printf '%f\n' \
+            | sort > /tmp/ps4_sdk_libs.txt
+          head -60 /tmp/ps4_sdk_libs.txt
           echo "PKG prerequisites:"
           for f in samples/hello_world/sce_module/libSceFios2.prx \
                    samples/hello_world/sce_module/libc.prx \
