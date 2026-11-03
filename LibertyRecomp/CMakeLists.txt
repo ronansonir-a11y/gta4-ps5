@@ -238,8 +238,6 @@ elseif (LIBERTY_RECOMP_TARGET_PLATFORM STREQUAL "ps4" OR CMAKE_SYSTEM_NAME STREQ
         "os/ps4/mspace_ps4.cpp"
         "os/ps4/np_activity_ps4.cpp"
         "os/ps4/atomic_wait_ps4.cpp"
-        "os/ps4/flags_ps4.cpp"
-        "os/ps4/eh_frame_stub.cpp"
     )
 elseif (LIBERTY_RECOMP_TARGET_PLATFORM STREQUAL "switch" OR CMAKE_SYSTEM_NAME STREQUAL "Switch")
     set(LIBERTY_RECOMP_OS_CXX_SOURCES

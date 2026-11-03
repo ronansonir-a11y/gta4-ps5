@@ -116,6 +116,8 @@ jobs:
           find "$OO_PS4_TOOLCHAIN/lib" -maxdepth 1 -type f -printf '%f\n' \
             | sort > /tmp/ps4_sdk_libs.txt
           head -60 /tmp/ps4_sdk_libs.txt
+          echo "SDK kernel / static libraries:"
+          grep -iE 'kernel|^lib.*\.a$' /tmp/ps4_sdk_libs.txt || true
           echo "PKG prerequisites:"
           for f in samples/hello_world/sce_module/libSceFios2.prx \
                    samples/hello_world/sce_module/libc.prx \

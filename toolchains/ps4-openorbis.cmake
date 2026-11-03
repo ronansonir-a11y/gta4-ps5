@@ -109,8 +109,7 @@ string(APPEND _PS4_LINK_FLAGS " -Wl,--eh-frame-hdr")
 string(APPEND _PS4_LINK_FLAGS " -Wl,--script=${OO_PS4_TOOLCHAIN}/link.x")
 # libunwind (in OpenOrbis libc++.a) references __eh_frame_start/end and
 # __eh_frame_hdr_start/end. link.x defines these as section bracket symbols
-# (KEEP(*(.eh_frame))), so our os/ps4/eh_frame_stub.cpp weak symbols are
-# now redundant — kept compiled-in for safety since they're zero-length.
+# (KEEP(*(.eh_frame))), so no object-file stub is needed.
 
 # PS4 CRT: ONLY crt1.o (provides _start entry point + .data.sce_process_param).
 # Drop crti.o/crtn.o — those are FreeBSD's _init/_fini wrappers; PS4 uses
