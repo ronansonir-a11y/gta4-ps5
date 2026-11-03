@@ -14,7 +14,7 @@
 #include <rex/platform.h>
 #include <cstddef>
 
-#if (REX_PLATFORM_LINUX || REX_PLATFORM_MAC) && !REX_PLATFORM_IOS && !REX_PLATFORM_ANDROID
+#if (REX_PLATFORM_LINUX || REX_PLATFORM_MAC || REX_PLATFORM_PS4) && !REX_PLATFORM_IOS && !REX_PLATFORM_ANDROID
 #if REX_PLATFORM_MAC && !defined(_XOPEN_SOURCE)
 // Darwin hides the deprecated ucontext APIs unless _XOPEN_SOURCE is defined
 // before including <ucontext.h>.
@@ -58,6 +58,17 @@ struct Fiber {
 #if REX_PLATFORM_WIN32
   void* handle_ = nullptr;
   bool is_thread_fiber_ = false;
+#elif REX_PLATFORM_PS4
+  // [ps4 pro] ucontext_ps4.c supplies getcontext/swapcontext/makecontext;
+  // fiber_ps4.cpp additionally saves the 512-byte fxsave area across a swap.
+  ucontext_t context_{};
+  std::vector<uint8_t> stack_;
+  void (*entry_)(void*) = nullptr;
+  void* arg_ = nullptr;
+  bool is_thread_fiber_ = false;
+  alignas(16) unsigned char fxsave_[512]{};
+
+  static void Trampoline();
 #elif REX_PLATFORM_IOS || REX_PLATFORM_ANDROID || REX_PLATFORM_NX
   alignas(16) unsigned char jmpbuf_[512]{};
   void* stack_ = nullptr;
