@@ -10,7 +10,8 @@
 #include <rex/chrono/clock.h>
 #include <rex/platform.h>
 
-static_assert(REX_PLATFORM_LINUX || REX_PLATFORM_MAC, "This file is POSIX-only");
+static_assert(REX_PLATFORM_LINUX || REX_PLATFORM_MAC || REX_PLATFORM_PS4,
+              "[ps4 pro] Orbis is POSIX-like too");
 
 #include <sys/time.h>
 

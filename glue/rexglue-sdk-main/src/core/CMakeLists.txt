@@ -73,6 +73,33 @@ elseif(APPLE)
         system_posix.cpp
         threading_mac.cpp
     )
+elseif(PS4)
+    # [ps4 pro] Orbis implementations replace their POSIX counterparts; do NOT
+    # compile both (memory_ps4.cpp and memory_posix.cpp export the same
+    # rex::memory::* symbols, threading_posix.cpp static_asserts on
+    # REX_PLATFORM_LINUX which is 0 on Orbis).
+    target_sources(rexcore PRIVATE
+        atomic_posix.cpp
+        clock_posix.cpp
+        dbg_posix.cpp
+        dynlib_ps4.cpp
+        exception_handler_ps4.cpp
+        filesystem_posix.cpp
+        fiber_ps4.cpp
+        mapped_memory_posix.cpp
+        math_gcc.cpp
+        memory_ps4.cpp
+        platform/console_posix.cpp
+        platform/env_posix.cpp
+        seh_posix.cpp
+        socket_posix.cpp
+        system_posix.cpp
+        threading_ps4.cpp
+        ucontext_ps4.c
+        logging_ps4.cpp
+        net_ps4.cpp
+        keyboard_dialog_ps4.cpp
+    )
 elseif(UNIX)
     if(ANDROID)
         set(REXCORE_POSIX_FIBER fiber_android.cpp)
@@ -136,6 +163,10 @@ if(PS5)
     # [ps5 port] the SDK's libc has pthreads; there is no librt / libdl.
     target_link_libraries(rexcore PUBLIC SceSystemService SceUserService ScePad SceAudioOut ps5platform)
     target_sources(rexcore PRIVATE ps5_libc_extras.c ps5_diag.cpp)
+elseif(PS4)
+    # [ps4 pro] Orbis kernel/user/pad/audio stubs come from the OpenOrbis
+    # toolchain's link flags; no PS5 payload-SDK libraries here.
+    target_link_libraries(rexcore PRIVATE pthread)
 elseif(APPLE)
     target_link_libraries(rexcore PRIVATE pthread)
 elseif(ANDROID)

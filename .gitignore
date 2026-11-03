@@ -794,3 +794,7 @@ CMakeUserPresets.json
 !/tools/tests/test_metal_shader_archive.py
 !/tools/vulkan/*.py
 !/glue/rexglue-sdk-main/cmake/fidelityfx_shader_compiler.py
+
+# [ps4 pro] PS4 Pro CI workflow and SFO helper must be committed.
+!/.github/workflows/build-ps4-pro.yml
+!/tools/ps4/sfo_neo.py

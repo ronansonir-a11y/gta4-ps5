@@ -22,6 +22,7 @@
 #include <rex/graphics/video_mode_util.h>
 #include <rex/kernel/xboxkrnl/threading.h>
 #include <rex/cvar.h>
+#include <rex/platform.h>
 #include <rex/logging.h>
 #include <rex/runtime.h>
 #include <rex/system/kernel_state.h>
@@ -152,7 +153,9 @@ REXCVAR_DEFINE_DOUBLE(gta4_native_auto_hdr_shoulder_power, 2.5,
                       "Auto HDR highlight shoulder exponent")
     .range(1.0, 10.0);
 
-REXCVAR_DEFINE_UINT32(gta4_shadow_map_base_size, REX_PLATFORM_ANDROID ? 256 : 512,
+// [ps4 pro] 1080p + Pro memory budget: smaller shadow cache and shorter
+// shadow distance, cheaper reflections and FXAA instead of SMAA.
+REXCVAR_DEFINE_UINT32(gta4_shadow_map_base_size, REX_PLATFORM_PS4 || REX_PLATFORM_ANDROID ? 256 : 512,
                       "GTA IV/Graphics/Shadows",
                       "Base shadow-map size (512 creates a 4096x4096 point-shadow cache)")
     .range(256, 1024)
@@ -160,16 +163,16 @@ REXCVAR_DEFINE_UINT32(gta4_shadow_map_base_size, REX_PLATFORM_ANDROID ? 256 : 51
 REXCVAR_DEFINE_DOUBLE(gta4_shadow_distance_guard_factor, 1.0, "GTA IV/Graphics/Shadows",
                       "Multiplier on the shadow distance owned by the 30 FPS guard")
     .range(0.1, 1.0);
-REXCVAR_DEFINE_DOUBLE(gta4_shadow_distance_scale, REX_PLATFORM_PS5 ? 1.0 : 2.0, "GTA IV/Graphics/Shadows",
+REXCVAR_DEFINE_DOUBLE(gta4_shadow_distance_scale, REX_PLATFORM_PS5 || REX_PLATFORM_PS4 ? 1.0 : 2.0, "GTA IV/Graphics/Shadows",
                       "Multiplier applied to GTA IV's directional shadow range")
     .range(0.1, 4.0)
     .lifecycle(rex::cvar::Lifecycle::kRequiresRestart);
-REXCVAR_DEFINE_STRING(gta4_reflection_resolution, REX_PLATFORM_ANDROID ? "original" : "1080p",
+REXCVAR_DEFINE_STRING(gta4_reflection_resolution, REX_PLATFORM_PS4 || REX_PLATFORM_ANDROID ? "original" : "1080p",
                       "GTA IV/Graphics/Reflections",
                       "Reflection resolution preset: original, 1080p, or full")
     .allowed({"original", "1080p", "full"})
     .lifecycle(rex::cvar::Lifecycle::kRequiresRestart);
-REXCVAR_DEFINE_STRING(gta4_reflection_resolution_cap, "1440p", "GTA IV/Graphics/Reflections",
+REXCVAR_DEFINE_STRING(gta4_reflection_resolution_cap, REX_PLATFORM_PS4 ? "1080p" : "1440p", "GTA IV/Graphics/Reflections",
                       "Maximum Full reflection resolution: 1080p, 1440p, or display")
     .allowed({"1080p", "1440p", "display"})
     .lifecycle(rex::cvar::Lifecycle::kRequiresRestart);
@@ -198,7 +201,7 @@ REXCVAR_DEFINE_STRING(gta4_reflection_capture_distance, "original",
                       "Exterior environment capture distance: near (20), original (40), extended (60), or "
                       "far (80)")
     .allowed({"near", "original", "extended", "far"});
-REXCVAR_DEFINE_STRING(gta4_native_anti_aliasing, REX_PLATFORM_ANDROID || REX_PLATFORM_PS5 ? "fxaa" : "smaa",
+REXCVAR_DEFINE_STRING(gta4_native_anti_aliasing, REX_PLATFORM_ANDROID || REX_PLATFORM_PS5 || REX_PLATFORM_PS4 ? "fxaa" : "smaa",
                       "GTA IV/Graphics/Anti-Aliasing",
                       "Anti-aliasing: off, fxaa, smaa, deferred MSAA, or even-factor SSAA")
     // `spatial` remains loadable as a deprecated compatibility alias. It is
@@ -248,7 +251,7 @@ REXCVAR_DEFINE_DOUBLE(gta4_dynamic_draw_distance_min, 0.7, "GTA IV/Graphics/LOD"
 REXCVAR_DEFINE_DOUBLE(gta4_draw_distance_dynamic_factor, 1.0, "GTA IV/Graphics/LOD",
                       "Current dynamic draw-distance factor (managed automatically)")
     .range(0.25, 1.0);
-REXCVAR_DEFINE_DOUBLE(gta4_draw_distance_scale, REX_PLATFORM_ANDROID || REX_PLATFORM_PS5 ? 1.0 : 3.0,
+REXCVAR_DEFINE_DOUBLE(gta4_draw_distance_scale, REX_PLATFORM_ANDROID || REX_PLATFORM_PS5 || REX_PLATFORM_PS4 ? 1.0 : 3.0,
                       "GTA IV/Graphics/LOD",
                       "Multiplier applied through GTA IV's built-in world-distance input")
     .range(0.25, 4.0);

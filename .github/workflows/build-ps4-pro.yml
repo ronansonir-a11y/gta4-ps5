@@ -1,0 +1,122 @@
+name: Build PS4 Pro (OpenOrbis / Neo / 1080p)
+
+# This workflow assumes the ps4-pro.patch from this change set is committed.
+# It builds eboot.bin + sce_sys/param.sfo WITHOUT the 7 GB Xbox 360 payload.
+"on":
+  workflow_dispatch:
+    inputs:
+      neo_mode:
+        description: "PS4 Pro / Neo memory mode (ATTRIBUTE bit 23, 5 GiB direct memory)"
+        type: boolean
+        default: true
+      skip_game_payload:
+        description: "Build without embedding the game files"
+        type: boolean
+        default: true
+      ps4_game_root:
+        description: "Runtime directory with default.xex + *.rpf on the console"
+        type: string
+        default: "/data/gta4"
+  push:
+    paths:
+      - ".github/workflows/build-ps4-pro.yml"
+      - "CMakePresets.json"
+      - "toolchains/ps4-openorbis.cmake"
+      - "tools/ps4/sfo_neo.py"
+  pull_request:
+    paths:
+      - ".github/workflows/build-ps4-pro.yml"
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      OO_PS4_TOOLCHAIN: ${{ github.workspace }}/tools/OpenOrbis-PS4-Toolchain
+    steps:
+      - name: Checkout (no submodules, no game files)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          submodules: false
+
+      - name: Host toolchain (clang/lld/ninja/CMake >= 3.29)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            clang lld llvm ninja-build python3 python3-pip git unzip wget ca-certificates
+          python3 -m pip install --user --upgrade "cmake==3.31.6"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          cmake --version
+          clang --version | head -1
+          ninja --version
+
+      - name: OpenOrbis PS4 toolchain (headers, link.x, CRT, create-fself)
+        run: |
+          set -euo pipefail
+          rm -rf tools/OpenOrbis-PS4-Toolchain
+          git clone --depth 1 \
+            https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain.git \
+            tools/OpenOrbis-PS4-Toolchain
+          # The repo itself has no prebuilt host binaries in bin/linux/ and no
+          # make_param_sfo.py. Release v0.5.3 ships create-fself, create-gp4,
+          # PkgTool.Core, include/orbis, link.x and lib/crt1.o.
+          wget -q -O /tmp/oo.zip \
+            https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/releases/download/v0.5.3/toolchain-llvm-18.2.zip
+          unzip -q -o /tmp/oo.zip -d /tmp/oo
+          mkdir -p /tmp/oo/extracted
+          tar -xzf /tmp/oo/toolchain-llvm-18.tar.gz -C /tmp/oo/extracted \
+            --strip-components=2
+          cp -a /tmp/oo/extracted/. tools/OpenOrbis-PS4-Toolchain/
+          chmod +x tools/OpenOrbis-PS4-Toolchain/bin/linux/create-fself \
+                 tools/OpenOrbis-PS4-Toolchain/bin/linux/create-gp4 \
+                 tools/OpenOrbis-PS4-Toolchain/bin/linux/PkgTool.Core 2>/dev/null || true
+          test -x tools/OpenOrbis-PS4-Toolchain/bin/linux/create-fself
+          test -f tools/OpenOrbis-PS4-Toolchain/link.x
+          # toolchains/ps4-openorbis.cmake generates orbis-ld in the build
+          # tree; keep a copy in the SDK tree as well for older CMake runs.
+          mkdir -p tools/OpenOrbis-PS4-Toolchain/bin
+          printf '#!/bin/sh\nexec ld.lld "$@"\n' > tools/OpenOrbis-PS4-Toolchain/bin/orbis-ld
+          chmod +x tools/OpenOrbis-PS4-Toolchain/bin/orbis-ld
+
+      - name: Fetch third-party submodules (setup.sh, no game data)
+        run: ./setup.sh
+
+      - name: Configure (ps4-pro-release)
+        run: |
+          cmake --preset ps4-pro-release \
+            -DLIBERTY_RECOMP_SKIP_GAME_PAYLOAD=${{ inputs.skip_game_payload == false && 'OFF' || 'ON' }} \
+            -DLIBERTY_PS4_NEO_MODE=${{ inputs.neo_mode == false && 'OFF' || 'ON' }} \
+            -DLIBERTY_PS4_GAME_ROOT="${{ inputs.ps4_game_root || '/data/gta4' }}" \
+            -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+
+      - name: Build eboot.bin
+        run: cmake --build out/build/ps4-pro-release --target LibertyRecomp -j 2
+
+      - name: Build sce_sys/param.sfo (Neo ATTRIBUTE bit 23)
+        run: |
+          cmake --build out/build/ps4-pro-release --target LibertyRecomp-sfo -j 2
+          python3 tools/ps4/sfo_neo.py inspect \
+            out/build/ps4-pro-release/pkg_staging/sce_sys/param.sfo
+
+      - name: Optional PKG (requires create-gp4 + PkgTool.Core)
+        continue-on-error: true
+        run: cmake --build out/build/ps4-pro-release --target LibertyRecomp-pkg -j 2
+
+      - name: Collect artefacts
+        run: |
+          set -euo pipefail
+          mkdir -p artefacts/sce_sys
+          cp out/build/ps4-pro-release/LibertyRecomp/eboot.bin artefacts/ 2>/dev/null || \
+            find out/build/ps4-pro-release -name eboot.bin -exec cp {} artefacts/ \; -quit
+          cp out/build/ps4-pro-release/pkg_staging/sce_sys/param.sfo artefacts/sce_sys/
+          ls -lh artefacts artefacts/sce_sys
+          test -s artefacts/eboot.bin
+          test -s artefacts/sce_sys/param.sfo
+
+      - name: Upload eboot.bin + param.sfo
+        uses: actions/upload-artifact@v4
+        with:
+          name: gta4-ps4-pro-eboot
+          path: artefacts/
+          if-no-files-found: error

@@ -98,10 +98,33 @@ option(LIBERTY_RECOMP_ANDROID_RUNTIME_ASSETS
     "Android: expect the game payload to be supplied at runtime (skip CMake-time validation)"
     OFF)
 
+# [ps4 pro] Compile eboot.bin / param.sfo WITHOUT the ~7 GB extracted Xbox 360
+# disc payload. Empty zero-byte stubs are created in the build tree; the real
+# game files are supplied on the console at runtime (see
+# LibertyRecomp/install/ps4_game_root.h). Default OFF keeps every other target
+# (desktop, Android, iOS, Switch, PS5) completely unchanged.
+option(LIBERTY_RECOMP_SKIP_GAME_PAYLOAD
+    "Build without the extracted Xbox 360 game payload (create empty build-tree stubs)" OFF)
+
 if(NOT LIBERTY_RECOMP_TARGET_PLATFORM STREQUAL "desktop")
     message(STATUS "Embedded game path: ${LIBERTY_RECOMP_EMBEDDED_GAME_PATH}")
 
-    if(LIBERTY_RECOMP_TARGET_PLATFORM STREQUAL "android" AND LIBERTY_RECOMP_ANDROID_RUNTIME_ASSETS)
+    if(LIBERTY_RECOMP_SKIP_GAME_PAYLOAD)
+        # [ps4 pro] No FATAL_ERROR and no 7 GB upload: stage empty stubs in the
+        # build directory and point every downstream consumer at them.
+        set(_ps4_stub_root "${CMAKE_BINARY_DIR}/ps4_empty_game_payload")
+        file(MAKE_DIRECTORY "${_ps4_stub_root}")
+        foreach(_req_file default.xex common.rpf xbox360.rpf audio.rpf)
+            if(NOT EXISTS "${_ps4_stub_root}/${_req_file}")
+                file(WRITE "${_ps4_stub_root}/${_req_file}" "")
+            endif()
+        endforeach()
+        set(LIBERTY_RECOMP_EMBEDDED_GAME_PATH "${_ps4_stub_root}" CACHE PATH "" FORCE)
+        message(STATUS
+            "PS4 Pro: LIBERTY_RECOMP_SKIP_GAME_PAYLOAD=ON — empty payload stubs at ${_ps4_stub_root}.\n"
+            "         Set LIBERTY_PS4_GAME_ROOT (CMake) or the LIBERTY_PS4_GAME_ROOT env var\n"
+            "         on the console to the directory holding the real game files.")
+    elseif(LIBERTY_RECOMP_TARGET_PLATFORM STREQUAL "android" AND LIBERTY_RECOMP_ANDROID_RUNTIME_ASSETS)
         message(STATUS
             "Android: LIBERTY_RECOMP_ANDROID_RUNTIME_ASSETS=ON — skipping build-time\n"
             "         game-file validation. The Activity's folder-picker flow is\n"
@@ -171,8 +194,9 @@ endif()
 string(TOLOWER "${LIBERTY_RECOMP_ARCHITECTURE}" LIBERTY_RECOMP_ARCHITECTURE)
 message(STATUS "Detected architecture: ${LIBERTY_RECOMP_ARCHITECTURE}")
 
-if (LIBERTY_RECOMP_ARCHITECTURE STREQUAL "x86_64" OR LIBERTY_RECOMP_ARCHITECTURE STREQUAL "amd64")
-    # Target Sandy Bridge for all projects
+if (NOT PS4 AND (LIBERTY_RECOMP_ARCHITECTURE STREQUAL "x86_64" OR LIBERTY_RECOMP_ARCHITECTURE STREQUAL "amd64"))
+    # Target Sandy Bridge for all projects (PS4 Pro uses Jaguar: -march=btver2
+    # is supplied by toolchains/ps4-openorbis.cmake).
     add_compile_options(
         -march=sandybridge
     )

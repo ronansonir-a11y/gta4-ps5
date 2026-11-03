@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include <rex/platform.h>
 #include <rex/dbg.h>
 #include <rex/input/flags.h>
 #include <rex/input/absolute_pointer.h>
@@ -22,6 +23,9 @@
 #include <rex/input/mnk/mnk_input_driver.h>
 #if REX_PLATFORM_PS5
 #include <rex/input/ps5/ps5_input_driver.h>
+#endif
+#if REX_PLATFORM_PS4
+#include <rex/input/ps4/ps4_input_driver.h>
 #endif
 #include <rex/input/nop/nop_input_driver.h>
 #if REX_PLATFORM_NX
@@ -395,6 +399,10 @@ std::unique_ptr<InputSystem> CreateDefaultInputSystem(bool tool_mode) {
     // [ps5 port] DualSense pads; SDL has no PS5 controller backend.
     auto ps5_driver = std::make_unique<ps5::Ps5InputDriver>(nullptr, 0);
     if (ps5_driver->Setup() == X_STATUS_SUCCESS) input->AddDriver(std::move(ps5_driver));
+#elif REX_PLATFORM_PS4
+    // [ps4 pro] Orbis pads; SDL has no scePad backend on the PS4.
+    auto ps4_driver = std::make_unique<ps4::PS4InputDriver>(nullptr, 0);
+    if (ps4_driver->Setup() == X_STATUS_SUCCESS) input->AddDriver(std::move(ps4_driver));
 #else
     const bool expose_sdl_gamepad_state = REXCVAR_GET(input_backend) == "sdl";
     auto sdl_driver = std::make_unique<sdl::SDLInputDriver>(nullptr, 0, expose_sdl_gamepad_state);

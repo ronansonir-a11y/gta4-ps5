@@ -549,6 +549,24 @@ elseif(PS5)
         liberty_stage_vulkan_temporal_archive(gta4)
         set_property(SOURCE src/ps5/hub/hub_ui.cpp APPEND PROPERTY COMPILE_DEFINITIONS LIBERTY_HAS_FSR3=1)
     endif()
+elseif(PS4)
+    # [ps4 pro] OpenOrbis build. The executable is the legacy LibertyRecomp
+    # target in ../../../LibertyRecomp (os/ps4/ps4_main.cpp + gpu/video.cpp);
+    # this Graine consumer therefore stays an INTERFACE library exactly like
+    # the desktop branch, but with PS4-specific defaults and no PS5 hub,
+    # RADV, FSR3 or Vulkan plugin sources.
+    add_library(gta4_recomp INTERFACE)
+    target_include_directories(gta4_recomp INTERFACE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/generated
+    )
+    target_compile_definitions(gta4_recomp INTERFACE
+        LIBERTY_RECOMP_PS4=1
+        GTA4_PS4_OUTPUT_WIDTH=${LIBERTY_PS4_OUTPUT_WIDTH}
+        GTA4_PS4_OUTPUT_HEIGHT=${LIBERTY_PS4_OUTPUT_HEIGHT}
+    )
+    set(GTA4_RECOMP_GENERATED_SOURCES ${GENERATED_SOURCES} PARENT_SCOPE)
+    message(STATUS "PS4 Pro: Graine consumer as INTERFACE (GNM path, ${LIBERTY_PS4_OUTPUT_WIDTH}x${LIBERTY_PS4_OUTPUT_HEIGHT})")
 else()
     add_library(gta4_recomp INTERFACE)
     target_include_directories(gta4_recomp INTERFACE

@@ -40,6 +40,9 @@ message(STATUS "Using OpenOrbis PS4 Toolchain: ${OO_PS4_TOOLCHAIN}")
 
 set(CMAKE_SYSTEM_NAME PS4)
 set(CMAKE_SYSTEM_PROCESSOR x86_64)
+# [ps4 pro] Make the platform switch available to every CMakeLists in glue/.
+# CMake does not guarantee a PS4 variable for custom CMAKE_SYSTEM_NAME values.
+set(PS4 1 CACHE BOOL "Building for PS4 / OpenOrbis" FORCE)
 
 # OpenOrbis sample builds target FreeBSD ELF and rely on link.x + create-fself
 # for PS4-specific rewriting. Match that model instead of mixing in the
@@ -71,7 +74,16 @@ set(CMAKE_ASM_COMPILER_TARGET "x86_64-pc-freebsd12-elf")
 # the host lld (which natively supports the PS4/orbis linker flavor).
 # -B tells clang where to find toolchain programs.
 # Link PS4 system libraries: C/C++ runtime, kernel, and SDK stubs.
-set(_PS4_LINK_FLAGS "-B ${OO_PS4_TOOLCHAIN}/bin")
+# [ps4 pro] Stock OpenOrbis releases ship bin/linux/create-fself but no
+# top-level bin/orbis-ld wrapper. Generate one in the build tree so clang's
+# -B lookup finds a host lld that understands the Orbis/FreeBSD ELF flavour.
+set(_PS4_ORBIS_BIN "${CMAKE_BINARY_DIR}/ps4-toolchain-bin")
+file(MAKE_DIRECTORY "${_PS4_ORBIS_BIN}")
+if(NOT EXISTS "${_PS4_ORBIS_BIN}/orbis-ld")
+    file(WRITE "${_PS4_ORBIS_BIN}/orbis-ld" "#!/bin/sh\nexec \"${LD_LLD_PATH}\" \"$@\"\n")
+    execute_process(COMMAND chmod +x "${_PS4_ORBIS_BIN}/orbis-ld")
+endif()
+set(_PS4_LINK_FLAGS "-B ${_PS4_ORBIS_BIN}")
 # Match the canonical OpenOrbis sample build (samples/hello_world/Makefile):
 # `-m elf_x86_64 -pie --script $(TOOLCHAIN)/link.x --eh-frame-hdr crt1.o`.
 # The clang freebsd12 driver would otherwise inject its own crt1.o + crti.o +
@@ -109,8 +121,12 @@ string(APPEND _PS4_LINK_FLAGS " ${OO_PS4_TOOLCHAIN}/lib/crt1.o")
 # --allow-multiple-definition kept because libcxx_ps4_compat overlaps SDK libc++.
 # TODO(ps4): move to one libc++ source — drop either the compat archive or
 # the SDK -lc++/-lc++abi/-lunwind, and remove the workaround.
-string(APPEND _PS4_LINK_FLAGS " -Wl,--allow-multiple-definition")
-string(APPEND _PS4_LINK_FLAGS " ${OO_PS4_TOOLCHAIN}/lib/libcxx_ps4_compat.a")
+# [ps4 pro] libcxx_ps4_compat.a is a locally rebuilt LLVM 21 libc++ archive
+# that stock OpenOrbis releases do not ship. Only link it when present.
+if(EXISTS "${OO_PS4_TOOLCHAIN}/lib/libcxx_ps4_compat.a")
+    string(APPEND _PS4_LINK_FLAGS " -Wl,--allow-multiple-definition")
+    string(APPEND _PS4_LINK_FLAGS " ${OO_PS4_TOOLCHAIN}/lib/libcxx_ps4_compat.a")
+endif()
 string(APPEND _PS4_LINK_FLAGS " -lc++ -lc++abi -lunwind -lc -lm")
 string(APPEND _PS4_LINK_FLAGS " ${OO_PS4_TOOLCHAIN}/lib/libclang_rt.builtins-x86_64.a")
 # PS4 kernel (provides pthread, sceKernel*, mmap, etc.)
@@ -174,7 +190,8 @@ message(STATUS "PS4: Using Homebrew LLVM from ${_BREW_LLVM_DIR}")
 #   instead of platform-specific _CTYPE_* / _IS* constants.
 # Note: _LIBCPP_HAS_MUSL_LIBC and _LIBCPP_HAS_THREAD_API_PTHREAD are set
 # via the __config_site overlay in include/c++/v1/__config_site.
-set(_PS4_DEFINES "-D__ORBIS__ -D_GNU_SOURCE -U__FreeBSD__ -D_LIBCPP_PROVIDES_DEFAULT_RUNE_TABLE")
+# [ps4 pro] AMD Jaguar (btver2), not the PS5's Zen 2 and not Sandy Bridge.
+set(_PS4_DEFINES "-D__ORBIS__ -D_GNU_SOURCE -U__FreeBSD__ -D_LIBCPP_PROVIDES_DEFAULT_RUNE_TABLE -march=btver2")
 
 # Suppress default includes and set our explicit ordered paths
 # Modern clang may define wchar_t via stddef.h before OpenOrbis musl headers,
@@ -209,6 +226,15 @@ set(LIBERTY_RECOMP_GNM ON CACHE BOOL "Use GNM-native renderer on PS4" FORCE)
 
 # No installer wizard on PS4
 set(LIBERTY_RECOMP_EMBEDDED_ASSETS ON CACHE BOOL "Package assets at build time (no installer UI)" FORCE)
+
+# [ps4 pro] PS4 Pro / Neo memory profile. ATTRIBUTE bit 23 (0x800000) in
+# param.sfo is what makes sceKernelIsNeoMode() return 1 and grants the extra
+# 512 MiB of direct memory (5 GiB instead of the base 4.5 GiB).
+option(LIBERTY_PS4_NEO_MODE "Enable PS4 Pro (Neo) memory mode: param.sfo ATTRIBUTE bit 23" ON)
+set(LIBERTY_PS4_GAME_ROOT "/app0/game" CACHE PATH
+    "Default runtime directory with default.xex + *.rpf (overridable via LIBERTY_PS4_GAME_ROOT env var)")
+set(LIBERTY_PS4_OUTPUT_WIDTH "1920" CACHE STRING "PS4 Pro output width")
+set(LIBERTY_PS4_OUTPUT_HEIGHT "1080" CACHE STRING "PS4 Pro output height")
 
 # PKG output target name
 set(LIBERTY_PS4_TITLE_ID "LBTY00001" CACHE STRING "PS4 title ID for PKG packaging")

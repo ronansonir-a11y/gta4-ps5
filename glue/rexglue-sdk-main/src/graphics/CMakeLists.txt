@@ -147,7 +147,9 @@ endfunction()
 
 # [ps5 port] one static program on the PS5: only the gta4-native renderer,
 # linked in (gpu_plugin_loader.cpp calls it directly).
-if(NOT PS5)
+# [ps4 pro] The Xenos/Vulkan plugin is a desktop/Android/PS5 artefact; the PS4
+# build uses the GNM-backed legacy renderer in LibertyRecomp/gpu/video.cpp.
+if(NOT PS5 AND NOT PS4)
 add_library(rexgpu-xenos SHARED
     plugin_main.cpp
     ${REXGPU_XENOS_SOURCES}

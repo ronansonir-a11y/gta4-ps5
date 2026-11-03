@@ -1,5 +1,13 @@
 project("LibertyRecomp")
 
+# [ps4 pro] PS4 Pro / Neo mode and the runtime game-root override.
+if (CMAKE_SYSTEM_NAME STREQUAL "PS4" OR LIBERTY_RECOMP_TARGET_PLATFORM STREQUAL "ps4")
+    option(LIBERTY_PS4_NEO_MODE
+        "Enable PS4 Pro (Neo) memory mode: param.sfo ATTRIBUTE bit 23 + 5 GiB direct memory" ON)
+    set(LIBERTY_PS4_GAME_ROOT "/app0/game" CACHE PATH
+        "Default runtime directory with default.xex + *.rpf (env LIBERTY_PS4_GAME_ROOT overrides)")
+endif()
+
 # ── zlib: system library on desktop, built from source for console cross-compilation ──
 if (CMAKE_SYSTEM_NAME STREQUAL "PS4" OR CMAKE_SYSTEM_NAME STREQUAL "Switch")
     include(FetchContent)
@@ -127,6 +135,9 @@ add_compile_definitions(
 if (LIBERTY_RECOMP_TARGET_PLATFORM STREQUAL "ps4" OR CMAKE_SYSTEM_NAME STREQUAL "PS4")
     set(LIBERTY_RECOMP_PS4 TRUE)
     add_compile_definitions(LIBERTY_RECOMP_PS4)
+    # [ps4 pro] Used by install/ps4_game_root.h so the real game files can
+    # live outside the read-only /app0 PKG mount (e.g. /data/gta4/).
+    add_compile_definitions("LIBERTY_PS4_GAME_ROOT_DEFAULT=\"${LIBERTY_PS4_GAME_ROOT}\"")
 endif()
 if (LIBERTY_RECOMP_TARGET_PLATFORM STREQUAL "switch" OR CMAKE_SYSTEM_NAME STREQUAL "Switch")
     # CMake variable retained for conditional source lists / link targets below.
@@ -994,6 +1005,28 @@ else()
         set(LIBERTY_PS4_TITLE_STR   "Grand Theft Auto IV")
         set(LIBERTY_PS4_CATEGORY    "gd")  # gd = game data
 
+        # [ps4 pro] ATTRIBUTE bit 23 (1 << 23 = 0x800000 = 8388608) is the
+        # PS4 Pro / Neo flag. Without it sceKernelIsNeoMode() stays 0 and the
+        # kernel only exposes the base 4.5 GiB of direct memory.
+        set(LIBERTY_PS4_ATTRIBUTE_VALUE 0)
+        if (LIBERTY_PS4_NEO_MODE)
+            math(EXPR LIBERTY_PS4_ATTRIBUTE_VALUE "1 << 23")
+        endif()
+        set(LIBERTY_PS4_SFO_HELPER
+            "${CMAKE_CURRENT_SOURCE_DIR}/../tools/ps4/sfo_neo.py")
+        message(STATUS "PS4: param.sfo ATTRIBUTE = ${LIBERTY_PS4_ATTRIBUTE_VALUE} (Neo=${LIBERTY_PS4_NEO_MODE})")
+
+        # [ps4 pro] Skip copying the 7 GB payload into the PKG when the
+        # build is payload-free; the console reads the files at runtime.
+        if (LIBERTY_RECOMP_SKIP_GAME_PAYLOAD)
+            set(_ps4_copy_game_payload "")
+        else()
+            set(_ps4_copy_game_payload
+                COMMAND ${CMAKE_COMMAND} -E copy_directory
+                    "${LIBERTY_RECOMP_EMBEDDED_GAME_PATH}"
+                    "${LIBERTY_PS4_PKG_STAGING}/game")
+        endif()
+
         message(STATUS "PS4: TITLE_ID=${LIBERTY_PS4_TITLE_ID}  CONTENT_ID=${LIBERTY_PS4_CONTENT_ID}")
 
         # Detect host OS for toolchain bin subdir.
@@ -1110,7 +1143,12 @@ else()
                     "${LIBERTY_PS4_CONTENT_ID}"
                     "${LIBERTY_PS4_TITLE_STR}"
                     "${LIBERTY_PS4_VERSION}"
-                COMMENT "PS4: Generating sce_sys/param.sfo (make_param_sfo.py)"
+                COMMAND ${Python3_EXECUTABLE} "${LIBERTY_PS4_SFO_HELPER}" patch
+                    "${LIBERTY_PS4_PARAM_SFO}" --attribute ${LIBERTY_PS4_ATTRIBUTE_VALUE}
+                    --title-id "${LIBERTY_PS4_TITLE_ID}" --content-id "${LIBERTY_PS4_CONTENT_ID}"
+                    --title "${LIBERTY_PS4_TITLE_STR}" --version "${LIBERTY_PS4_VERSION}"
+                    --category "${LIBERTY_PS4_CATEGORY}"
+                COMMENT "PS4: Generating sce_sys/param.sfo (make_param_sfo.py + Neo bit)"
                 VERBATIM
             )
         elseif (LIBERTY_PS4_PKGTOOL)
@@ -1121,7 +1159,7 @@ else()
                 COMMAND "${LIBERTY_PS4_PKGTOOL}" sfo_new             "${LIBERTY_PS4_PARAM_SFO}"
                 COMMAND "${LIBERTY_PS4_PKGTOOL}" sfo_setentry "${LIBERTY_PS4_PARAM_SFO}" APP_TYPE           --type Integer --maxsize 4   --value 1
                 COMMAND "${LIBERTY_PS4_PKGTOOL}" sfo_setentry "${LIBERTY_PS4_PARAM_SFO}" APP_VER            --type Utf8    --maxsize 8   --value "${LIBERTY_PS4_VERSION}"
-                COMMAND "${LIBERTY_PS4_PKGTOOL}" sfo_setentry "${LIBERTY_PS4_PARAM_SFO}" ATTRIBUTE          --type Integer --maxsize 4   --value 0
+                COMMAND "${LIBERTY_PS4_PKGTOOL}" sfo_setentry "${LIBERTY_PS4_PARAM_SFO}" ATTRIBUTE          --type Integer --maxsize 4   --value ${LIBERTY_PS4_ATTRIBUTE_VALUE}
                 COMMAND "${LIBERTY_PS4_PKGTOOL}" sfo_setentry "${LIBERTY_PS4_PARAM_SFO}" CATEGORY           --type Utf8    --maxsize 4   --value "${LIBERTY_PS4_CATEGORY}"
                 COMMAND "${LIBERTY_PS4_PKGTOOL}" sfo_setentry "${LIBERTY_PS4_PARAM_SFO}" CONTENT_ID         --type Utf8    --maxsize 48  --value "${LIBERTY_PS4_CONTENT_ID}"
                 COMMAND "${LIBERTY_PS4_PKGTOOL}" sfo_setentry "${LIBERTY_PS4_PARAM_SFO}" DOWNLOAD_DATA_SIZE --type Integer --maxsize 4   --value 0
@@ -1129,20 +1167,30 @@ else()
                 COMMAND "${LIBERTY_PS4_PKGTOOL}" sfo_setentry "${LIBERTY_PS4_PARAM_SFO}" TITLE              --type Utf8    --maxsize 128 --value "${LIBERTY_PS4_TITLE_STR}"
                 COMMAND "${LIBERTY_PS4_PKGTOOL}" sfo_setentry "${LIBERTY_PS4_PARAM_SFO}" TITLE_ID           --type Utf8    --maxsize 12  --value "${LIBERTY_PS4_TITLE_ID}"
                 COMMAND "${LIBERTY_PS4_PKGTOOL}" sfo_setentry "${LIBERTY_PS4_PARAM_SFO}" VERSION            --type Utf8    --maxsize 8   --value "${LIBERTY_PS4_VERSION}"
-                COMMENT "PS4: Generating sce_sys/param.sfo (PkgTool.Core)"
+                COMMAND ${Python3_EXECUTABLE} "${LIBERTY_PS4_SFO_HELPER}" patch
+                    "${LIBERTY_PS4_PARAM_SFO}" --attribute ${LIBERTY_PS4_ATTRIBUTE_VALUE}
+                    --title-id "${LIBERTY_PS4_TITLE_ID}" --content-id "${LIBERTY_PS4_CONTENT_ID}"
+                    --title "${LIBERTY_PS4_TITLE_STR}" --version "${LIBERTY_PS4_VERSION}"
+                    --category "${LIBERTY_PS4_CATEGORY}"
+                COMMENT "PS4: Generating sce_sys/param.sfo (PkgTool.Core + Neo bit)"
                 VERBATIM
             )
         else()
-            message(WARNING
-                "PS4: Neither make_param_sfo.py nor PkgTool.Core is available — "
-                "param.sfo generation will be a placeholder. Install Python 3 "
-                "or the OpenOrbis toolchain to produce a real SFO.")
+            # [ps4 pro] Stock OpenOrbis has no make_param_sfo.py and no
+            # PkgTool.Core binary in the repo checkout. Generate a real SFO
+            # (including the Neo ATTRIBUTE bit) with our own helper instead of
+            # writing a useless placeholder file.
+            find_package(Python3 COMPONENTS Interpreter QUIET)
             add_custom_command(
                 OUTPUT  "${LIBERTY_PS4_PARAM_SFO}"
                 COMMAND ${CMAKE_COMMAND} -E make_directory "${LIBERTY_PS4_SCE_SYS_DIR}"
-                COMMAND ${CMAKE_COMMAND} -E echo "TODO: generate param.sfo TITLE_ID=${LIBERTY_PS4_TITLE_ID} CONTENT_ID=${LIBERTY_PS4_CONTENT_ID}"
-                COMMAND ${CMAKE_COMMAND} -E touch "${LIBERTY_PS4_PARAM_SFO}"
-                COMMENT "PS4: param.sfo placeholder (no generator found)"
+                COMMAND ${Python3_EXECUTABLE} "${LIBERTY_PS4_SFO_HELPER}" create
+                    "${LIBERTY_PS4_PARAM_SFO}" --attribute ${LIBERTY_PS4_ATTRIBUTE_VALUE}
+                    --title-id "${LIBERTY_PS4_TITLE_ID}" --content-id "${LIBERTY_PS4_CONTENT_ID}"
+                    --title "${LIBERTY_PS4_TITLE_STR}" --version "${LIBERTY_PS4_VERSION}"
+                    --category "${LIBERTY_PS4_CATEGORY}"
+                COMMENT "PS4: Generating sce_sys/param.sfo (sfo_neo.py, Neo=${LIBERTY_PS4_NEO_MODE})"
+                VERBATIM
             )
         endif()
 
@@ -1302,9 +1350,7 @@ else()
                 COMMAND ${CMAKE_COMMAND} -E copy
                     "$<TARGET_FILE_DIR:LibertyRecomp>/eboot.bin"
                     "${LIBERTY_PS4_PKG_STAGING}/eboot.bin"
-                COMMAND ${CMAKE_COMMAND} -E copy_directory
-                    "${LIBERTY_RECOMP_EMBEDDED_GAME_PATH}"
-                    "${LIBERTY_PS4_PKG_STAGING}/game"
+                ${_ps4_copy_game_payload}
 
                 # Bake the PS4 button-prompt XTD into the read-only /app0
                 # tree. On PS4 we can't write to the PKG mount at runtime,
@@ -1384,9 +1430,7 @@ else()
                 COMMAND ${CMAKE_COMMAND} -E copy_if_different
                     "${CMAKE_CURRENT_SOURCE_DIR}/res/ps4/sce_sys/snd0.wav"
                     "${LIBERTY_PS4_SCE_SYS_DIR}/snd0.wav"
-                COMMAND ${CMAKE_COMMAND} -E copy_directory
-                    "${LIBERTY_RECOMP_EMBEDDED_GAME_PATH}"
-                    "${LIBERTY_PS4_PKG_STAGING}/game"
+                ${_ps4_copy_game_payload}
                 COMMENT "PS4: Basic file staging only (.pkg tools not found)."
             )
         endif()
@@ -1432,22 +1476,29 @@ endif()
 # picks the game folder at runtime via the SAF folder picker, so there is no
 # build-time payload to validate.
 if (LIBERTY_RECOMP_EMBEDDED_ASSETS AND NOT LIBERTY_RECOMP_ANDROID_RUNTIME_ASSETS)
-    if (NOT LIBERTY_RECOMP_EMBEDDED_GAME_PATH)
-        message(FATAL_ERROR
-            "LIBERTY_RECOMP_EMBEDDED_ASSETS is ON but "
-            "LIBERTY_RECOMP_EMBEDDED_GAME_PATH is not set.\n"
-            "Point it at the directory containing default.xex, common.rpf, "
-            "xbox360.rpf and audio.rpf.")
-    endif()
-    foreach(_required_file default.xex common.rpf xbox360.rpf audio.rpf)
-        if (NOT EXISTS "${LIBERTY_RECOMP_EMBEDDED_GAME_PATH}/${_required_file}")
+    # [ps4 pro] With LIBERTY_RECOMP_SKIP_GAME_PAYLOAD=ON the root CMakeLists
+    # generated empty stubs; do not FATAL_ERROR on them. The real files are
+    # provided on the console at runtime.
+    if (NOT LIBERTY_RECOMP_SKIP_GAME_PAYLOAD)
+        if (NOT LIBERTY_RECOMP_EMBEDDED_GAME_PATH)
             message(FATAL_ERROR
-                "Required game file missing from payload: "
-                "${LIBERTY_RECOMP_EMBEDDED_GAME_PATH}/${_required_file}\n"
-                "See docs/PLATFORM_SETUP.md#build-time-asset-payload")
+                "LIBERTY_RECOMP_EMBEDDED_ASSETS is ON but "
+                "LIBERTY_RECOMP_EMBEDDED_GAME_PATH is not set.\n"
+                "Point it at the directory containing default.xex, common.rpf, "
+                "xbox360.rpf and audio.rpf.")
         endif()
-    endforeach()
-    message(STATUS "Embedded payload validated: ${LIBERTY_RECOMP_EMBEDDED_GAME_PATH}")
+        foreach(_required_file default.xex common.rpf xbox360.rpf audio.rpf)
+            if (NOT EXISTS "${LIBERTY_RECOMP_EMBEDDED_GAME_PATH}/${_required_file}")
+                message(FATAL_ERROR
+                    "Required game file missing from payload: "
+                    "${LIBERTY_RECOMP_EMBEDDED_GAME_PATH}/${_required_file}\n"
+                    "See docs/PLATFORM_SETUP.md#build-time-asset-payload")
+            endif()
+        endforeach()
+        message(STATUS "Embedded payload validated: ${LIBERTY_RECOMP_EMBEDDED_GAME_PATH}")
+    else()
+        message(STATUS "PS4 Pro: embedded payload validation skipped (empty stubs).")
+    endif()
 
     # Generate manifest.json so EmbeddedAssets::ReadManifest() works at runtime.
     string(TIMESTAMP _build_ts "%s" UTC)

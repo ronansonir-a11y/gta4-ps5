@@ -44,8 +44,10 @@ else()
     option(REXGLUE_USE_VULKAN "Enable Vulkan graphics backend" ON)
 endif()
 
-if(NOT REXGLUE_USE_D3D12 AND NOT REXGLUE_USE_VULKAN)
-    message(FATAL_ERROR "At least one graphics backend must be enabled (REXGLUE_USE_D3D12 or REXGLUE_USE_VULKAN)")
+# [ps4 pro] GNM is a third backend (LibertyRecomp/gpu/video.cpp); it does not
+# need either the D3D12 or the Vulkan ReXGlue backend.
+if(NOT REXGLUE_USE_D3D12 AND NOT REXGLUE_USE_VULKAN AND NOT LIBERTY_RECOMP_GNM)
+    message(FATAL_ERROR "At least one graphics backend must be enabled (REXGLUE_USE_D3D12, REXGLUE_USE_VULKAN or LIBERTY_RECOMP_GNM)")
 endif()
 
 if (REXGLUE_ENABLE_FIDELITYFX AND
@@ -122,7 +124,7 @@ if(NOT WIN32)
     # Use appropriate code model based on architecture
     # [ps5 port] PS5: the default (small) code model, as the PS5 linker script
     # and signer expect.
-    if(CMAKE_SYSTEM_PROCESSOR MATCHES "AMD64|x86_64" AND NOT APPLE AND NOT PS5)
+    if(CMAKE_SYSTEM_PROCESSOR MATCHES "AMD64|x86_64" AND NOT APPLE AND NOT PS5 AND NOT PS4)
         # Large code model on Linux x86_64 for linking with very large recompiled executables (35MB+).
         add_compile_options(-mcmodel=large)
     else()
@@ -163,7 +165,11 @@ if(APPLE AND CMAKE_OSX_ARCHITECTURES)
     list(GET CMAKE_OSX_ARCHITECTURES 0 REX_TARGET_PROCESSOR)
 endif()
 
-if(WIN32)
+if(PS4)
+    # [ps4 pro] Check first: CMAKE_SYSTEM_NAME=PS4 is a custom platform and
+    # CMake may still report UNIX=1 on some hosts. Orbis is NOT Linux.
+    set(REX_PLATFORM "ps4-amd64")
+elseif(WIN32)
     if(REX_TARGET_PROCESSOR MATCHES "AMD64|x86_64")
         set(REX_PLATFORM "win-amd64")
     elseif(REX_TARGET_PROCESSOR MATCHES "aarch64|ARM64|arm64")

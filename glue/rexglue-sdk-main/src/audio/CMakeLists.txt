@@ -14,6 +14,9 @@ add_library(rexaudio OBJECT
     sdl/sdl_audio_system.cpp
     sdl/sdl_audio_driver.cpp
     $<$<BOOL:${PS5}>:ps5/ps5_audio_driver.cpp>
+    # [ps4 pro] Orbis sceAudioOut backend (already present in this tree).
+    $<$<BOOL:${PS4}>:orbis/orbis_audio_system.cpp>
+    $<$<BOOL:${PS4}>:orbis/orbis_audio_driver.cpp>
 )
 add_library(rex::audio ALIAS rexaudio)
 

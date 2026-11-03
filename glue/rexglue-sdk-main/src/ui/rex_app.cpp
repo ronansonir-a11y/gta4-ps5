@@ -13,6 +13,7 @@
 
 #include <cstdlib>
 
+#include <rex/platform.h>
 #include <rex/assert.h>
 #include <rex/cvar.h>
 #include <rex/ui/flags.h>
@@ -28,6 +29,8 @@
 #include <rex/audio/audio_system.h>
 #if REX_PLATFORM_MAC && !REX_PLATFORM_IOS
 #include <rex/audio/coreaudio/coreaudio_audio_system.h>
+#elif REX_PLATFORM_PS4
+#include <rex/audio/orbis/orbis_audio_system.h>
 #else
 #include <rex/audio/sdl/sdl_audio_system.h>
 #endif
@@ -404,6 +407,8 @@ bool ReXApp::SetupPresentation() {
   config_.gpu_plugin = REXCVAR_GET(gpu_plugin);
 #if REX_PLATFORM_MAC && !REX_PLATFORM_IOS
   config_.audio_factory = REX_AUDIO_BACKEND(rex::audio::coreaudio::CoreAudioAudioSystem);
+#elif REX_PLATFORM_PS4
+  config_.audio_factory = REX_AUDIO_BACKEND(rex::audio::orbis::OrbisAudioSystem);
 #else
   config_.audio_factory = REX_AUDIO_BACKEND(rex::audio::sdl::SDLAudioSystem);
 #endif

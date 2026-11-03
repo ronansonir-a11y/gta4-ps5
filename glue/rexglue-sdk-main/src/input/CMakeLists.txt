@@ -15,6 +15,10 @@ add_library(rex::input ALIAS rexinput)
 if(PS5)
     # [ps5 port] DualSense through scePad
     target_sources(rexinput PRIVATE ps5/ps5_input_driver.cpp)
+elseif(PS4)
+    # [ps4 pro] DualShock 4 through OpenOrbis scePad (no adaptive triggers,
+    # no light bar, no scePadSetVibrationMode(2)).
+    target_sources(rexinput PRIVATE ps4/ps4_input_driver.cpp)
 endif()
 
 target_include_directories(rexinput PUBLIC

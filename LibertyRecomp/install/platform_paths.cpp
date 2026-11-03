@@ -1,4 +1,5 @@
 #include "platform_paths.h"
+#include "ps4_game_root.h"
 
 #include <rex/platform.h>
 #include <cstdlib>
@@ -118,7 +119,8 @@ namespace PlatformPaths
         // /app0/game. Any writes to this path silently fail. Callers that
         // need to write (e.g. runtime-generated button-prompt cache files)
         // must use GetWritableCacheDirectory() instead.
-        return std::filesystem::path("/app0/game");
+        // [ps4 pro] Same override as EmbeddedAssets::GetGameRoot().
+        return liberty::ps4::GameRoot();
 #else
         return GetInstallDirectory() / "game";
 #endif

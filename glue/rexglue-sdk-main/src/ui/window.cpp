@@ -53,7 +53,9 @@ REXCVAR_DEFINE_INT32(video_mode_height, 720, "Display", "Guest video mode height
 // Android: native 720p (the console's resolution); the presenter scales it to the panel.
 // [ps5 port] PS5: 4K, the output's own (the hub sets it; the PS5's graphics
 // card has room for it while the game's render thread is the limit).
-REXCVAR_DEFINE_STRING(resolution, REX_PLATFORM_ANDROID ? "720p" : REX_PLATFORM_PS5 ? "4k" : "", "Display",
+// [ps4 pro] 1080p output, not the PS5's 4K. "1080p" maps to 1920x1080 in
+// include/rex/graphics/video_mode_util.h.
+REXCVAR_DEFINE_STRING(resolution, REX_PLATFORM_ANDROID ? "720p" : REX_PLATFORM_PS5 ? "4k" : REX_PLATFORM_PS4 ? "1080p" : "", "Display",
                       "Common resolution preset for both guest video mode and startup window (for "
                       "example: 720p, 1080p, 1440p, 4k, 1280x720)")
     .lifecycle(rex::cvar::Lifecycle::kRequiresRestart);

@@ -3,7 +3,7 @@
 // Modeled on Minecraft PS4's user_malloc.cpp (Sony SDK reference).
 // Must be called before ANY other allocation — do it first in ps4_main.cpp.
 //
-// Memory layout (total: 4.6 GB dmem)
+// Memory layout (base PS4: 4.5 GiB dmem; PS4 Pro / Neo: 5 GiB dmem)
 //   Heap (mspace)   ~3.954 GB   — everything below
 //   GPU VRAM        512 MB      — reserved by renderer at init
 //   CPU gfx buffers 112 MB      — reserved by renderer at init
@@ -27,7 +27,25 @@ static size_t        s_memLength = 0;
 
 static constexpr size_t MB            = 1024ULL * 1024ULL;
 static constexpr size_t MEM_ALIGN     = 2 * MB;   // 2 MB — match dmem granularity
-static constexpr size_t HEAP_TOTAL    = 4608 * MB; // PS4 main dmem ceiling
+// [ps4 pro] Base PS4 direct memory is 4.5 GiB (4608 MiB). With Neo/Pro mode
+// enabled (param.sfo ATTRIBUTE bit 23) the kernel grants +512 MiB, i.e. 5 GiB
+// of direct memory; sceKernelIsNeoMode() decides which ceiling is real.
+static constexpr size_t HEAP_TOTAL_BASE = 4608 * MB;
+static constexpr size_t HEAP_TOTAL_NEO  = 5120 * MB;
+
+// sceKernelIsNeoMode() / sceKernelGetDirectMemorySize() are declared by
+// <orbis/libkernel.h> above.
+
+static size_t Ps4DirectMemoryCeiling()
+{
+    const size_t reported = sceKernelGetDirectMemorySize();
+    const bool   neo      = sceKernelIsNeoMode() != 0;
+    size_t       ceiling  = neo ? HEAP_TOTAL_NEO : HEAP_TOTAL_BASE;
+    // Never ask for more than the kernel actually reports.
+    if (reported != 0 && reported < ceiling)
+        ceiling = (reported / MEM_ALIGN) * MEM_ALIGN;
+    return ceiling;
+}
 
 static constexpr size_t RESERVE_TLS   = 4   * MB;
 static constexpr size_t RESERVE_RAZOR = 2   * MB;
@@ -39,7 +57,7 @@ static constexpr size_t RESERVE_CPU   = 112 * MB;
 
 extern "C" int user_malloc_init(void)
 {
-    s_memLength = HEAP_TOTAL
+    s_memLength = Ps4DirectMemoryCeiling()
                   - RESERVE_TLS
                   - RESERVE_RAZOR
                   - RESERVE_SAVES
@@ -49,7 +67,7 @@ extern "C" int user_malloc_init(void)
     // Allocate direct (physical) memory from the kernel
     int res = sceKernelAllocateDirectMemory(
         /*searchStart*/ 0,
-        /*searchEnd*/   SCE_KERNEL_MAIN_DMEM_SIZE,
+        /*searchEnd*/   static_cast<off_t>(Ps4DirectMemoryCeiling()),
         /*len*/         s_memLength,
         /*alignment*/   MEM_ALIGN,
         /*memoryType*/  SCE_KERNEL_WB_ONION,

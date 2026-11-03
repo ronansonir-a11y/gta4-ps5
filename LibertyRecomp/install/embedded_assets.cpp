@@ -1,5 +1,6 @@
 #include "embedded_assets.h"
 #include "platform_paths.h"
+#include "ps4_game_root.h"
 
 #include <fstream>
 #include <filesystem>
@@ -105,7 +106,9 @@ static bool extract_and_fsync(mz_zip_archive* zip, mz_uint idx,
 static std::filesystem::path ResolveEmbeddedGameRoot()
 {
 #if defined(__ORBIS__)
-    return std::filesystem::path("/app0/game");
+    // [ps4 pro] Allow an external game directory (e.g. /data/gta4/) instead of
+    // the read-only /app0/game inside the PKG.
+    return liberty::ps4::GameRoot();
 #elif defined(__SWITCH__)
     return std::filesystem::path("romfs:/game");
 #elif REX_PLATFORM_IOS

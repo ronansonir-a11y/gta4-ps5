@@ -376,6 +376,46 @@
             }
         },
         {
+            "name": "ps4-pro-release",
+            "displayName": "PS4 Pro Release (1080p / Neo)",
+            "inherits": "ps4-base",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "LIBERTY_RECOMP_SKIP_GAME_PAYLOAD": {
+                    "value": "ON",
+                    "type": "BOOL"
+                },
+                "LIBERTY_PS4_NEO_MODE": {
+                    "value": "ON",
+                    "type": "BOOL"
+                },
+                "LIBERTY_PS4_OUTPUT_WIDTH": {
+                    "value": "1920",
+                    "type": "STRING"
+                },
+                "LIBERTY_PS4_OUTPUT_HEIGHT": {
+                    "value": "1080",
+                    "type": "STRING"
+                },
+                "LIBERTY_RECOMP_VULKAN": {
+                    "value": "OFF",
+                    "type": "BOOL"
+                },
+                "LIBERTY_RECOMP_GNM": {
+                    "value": "ON",
+                    "type": "BOOL"
+                },
+                "REXGLUE_ENABLE_FIDELITYFX": {
+                    "value": "OFF",
+                    "type": "BOOL"
+                },
+                "REXGLUE_ENABLE_TRACY": {
+                    "value": "OFF",
+                    "type": "BOOL"
+                }
+            }
+        },
+        {
             "name": "switch-base",
             "hidden": true,
             "generator": "Ninja",
@@ -538,6 +578,10 @@
         {
             "name": "ps4-release",
             "configurePreset": "ps4-release"
+        },
+        {
+            "name": "ps4-pro-release",
+            "configurePreset": "ps4-pro-release"
         },
         {
             "name": "switch-debug",

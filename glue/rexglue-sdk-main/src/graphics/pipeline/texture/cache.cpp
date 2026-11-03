@@ -17,6 +17,7 @@
 #include <rex/chrono/clock.h>
 #include <rex/cvar.h>
 #include <rex/dbg.h>
+#include <rex/platform.h>
 #include <rex/graphics/flags.h>
 #include <rex/graphics/pipeline/texture/cache.h>
 #include <rex/graphics/pipeline/texture/info.h>
@@ -31,12 +32,16 @@ REXCVAR_DEFINE_INT32(texture_cache_memory_limit_render_to_texture, 24, "GPU",
     .range(1, 256)
     .lifecycle(rex::cvar::Lifecycle::kRequiresRestart);
 
-REXCVAR_DEFINE_INT32(texture_cache_memory_limit_soft, 384, "GPU",
+// [ps4 pro] ~5.5 GB total on a Pro (5 GiB direct + ~448 MiB flexible). Keep
+// the host texture cache well below the desktop/PS5 defaults.
+REXCVAR_DEFINE_INT32(texture_cache_memory_limit_soft,
+                     REX_PLATFORM_PS4 ? 192 : 384, "GPU",
                      "Soft texture cache memory limit (MB)")
     .range(64, 4096)
     .lifecycle(rex::cvar::Lifecycle::kRequiresRestart);
 
-REXCVAR_DEFINE_INT32(texture_cache_memory_limit_hard, 768, "GPU",
+REXCVAR_DEFINE_INT32(texture_cache_memory_limit_hard,
+                     REX_PLATFORM_PS4 ? 384 : 768, "GPU",
                      "Hard texture cache memory limit (MB)")
     .range(128, 8192)
     .lifecycle(rex::cvar::Lifecycle::kRequiresRestart);

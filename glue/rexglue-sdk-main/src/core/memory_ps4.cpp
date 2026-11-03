@@ -190,11 +190,23 @@ void* AllocFixed(void* base_address, size_t length, AllocationType allocation_ty
   // header declares sceKernelAllocateMainDirectMemory's last arg as off_t
   // (by value) rather than off_t* — passing an address via that signature
   // is not portable. The 6-arg form matches user_malloc_ps4.cpp's pattern.
+  // [ps4 pro] Query the real direct-memory ceiling instead of the compile-time
+  // SCE_KERNEL_MAIN_DMEM_SIZE constant. Neo mode grants +512 MiB (5 GiB).
+  const size_t dmem_size = sceKernelGetDirectMemorySize();
+  const off_t  search_end = dmem_size ? static_cast<off_t>(dmem_size)
+                                      : static_cast<off_t>(SCE_KERNEL_MAIN_DMEM_SIZE);
+  // <cstdio> is already included; avoid pulling in the spdlog macro layer
+  // from this low-level allocator.
+  std::fprintf(stderr,
+               "[PS4 memory] direct memory %llu MiB, Neo mode %d\n",
+               static_cast<unsigned long long>(dmem_size / (1024u * 1024u)),
+               sceKernelIsNeoMode() != 0 ? 1 : 0);
+
   off_t        dmem_offset  = 0;
   size_t       effective_len = aligned_length;
   int32_t      res          = sceKernelAllocateDirectMemory(
       /*searchStart*/ 0,
-      /*searchEnd*/   SCE_KERNEL_MAIN_DMEM_SIZE,
+      /*searchEnd*/   search_end,
       /*len*/         effective_len,
       /*alignment*/   kOrbisDirectAlign,
       /*memoryType*/  SCE_KERNEL_WB_ONION,
@@ -212,14 +224,19 @@ void* AllocFixed(void* base_address, size_t length, AllocationType allocation_ty
                    "(res=0x%08x); falling back to smaller sizes.\n",
                    aligned_length, static_cast<unsigned>(res));
     }
+    // [ps4 pro] Try the Pro-sized reservation first, then the base-sized one,
+    // then progressively smaller footprints. A reduced guest arena is still
+    // better than a failed boot, but it must be visible in the log.
     const size_t kFallbacks[] = {
-        4ULL * 1024ULL * 1024ULL * 1024ULL,  // 4 GB
-        2ULL * 1024ULL * 1024ULL * 1024ULL,  // 2 GB
-        1ULL * 1024ULL * 1024ULL * 1024ULL,  // 1 GB
+        5ULL * 1024ULL * 1024ULL * 1024ULL,  // 5 GiB (PS4 Pro / Neo)
+        4608ULL * 1024ULL * 1024ULL,         // 4.5 GiB (base PS4)
+        4ULL * 1024ULL * 1024ULL * 1024ULL,  // 4 GiB
+        2ULL * 1024ULL * 1024ULL * 1024ULL,  // 2 GiB
+        1ULL * 1024ULL * 1024ULL * 1024ULL,  // 1 GiB
     };
     for (size_t fb : kFallbacks) {
       if (fb >= aligned_length) continue;  // only try *smaller* than the ask
-      res = sceKernelAllocateDirectMemory(0, SCE_KERNEL_MAIN_DMEM_SIZE, fb,
+      res = sceKernelAllocateDirectMemory(0, search_end, fb,
                                           kOrbisDirectAlign,
                                           SCE_KERNEL_WB_ONION, &dmem_offset);
       if (res >= 0) {
