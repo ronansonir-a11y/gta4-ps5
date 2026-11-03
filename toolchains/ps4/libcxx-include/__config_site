@@ -23,4 +23,22 @@
 #  define _LIBCPP_PROVIDES_DEFAULT_RUNE_TABLE 1
 #endif
 
+/* libc++ 18 still gates std::jthread/std::stop_token behind the experimental
+ * flag.  reXGlue's timer_queue.cpp uses them under -std=c++23.  Opt in here,
+ * but keep the other incomplete/experimental library features disabled so we
+ * don't start depending on tzdb/PSTL/syncstream symbols absent from the
+ * OpenOrbis SDK's 2021 static libc++. */
+#ifndef _LIBCPP_ENABLE_EXPERIMENTAL
+#  define _LIBCPP_ENABLE_EXPERIMENTAL
+#endif
+#ifndef _LIBCPP_HAS_NO_INCOMPLETE_PSTL
+#  define _LIBCPP_HAS_NO_INCOMPLETE_PSTL
+#endif
+#ifndef _LIBCPP_HAS_NO_INCOMPLETE_TZDB
+#  define _LIBCPP_HAS_NO_INCOMPLETE_TZDB
+#endif
+#ifndef _LIBCPP_HAS_NO_EXPERIMENTAL_SYNCSTREAM
+#  define _LIBCPP_HAS_NO_EXPERIMENTAL_SYNCSTREAM
+#endif
+
 #endif  // _LIBCPP_PS4_CONFIG_SITE
