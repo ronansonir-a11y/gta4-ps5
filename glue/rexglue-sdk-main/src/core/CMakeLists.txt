@@ -98,7 +98,9 @@ elseif(PS4)
         ucontext_ps4.c
         logging_ps4.cpp
         net_ps4.cpp
-        keyboard_dialog_ps4.cpp
+        # keyboard_dialog_ps4.cpp is intentionally not built: the repository has
+        # no rex/kernel/xam/keyboard_dialog.h or keyboard-dialog frontend, so
+        # this orphaned backend cannot compile and has no caller on Orbis.
     )
 elseif(UNIX)
     if(ANDROID)

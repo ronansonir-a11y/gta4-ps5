@@ -7,7 +7,7 @@ Apply with `git apply ps4-pro.patch` on `elripalda/gta4-ps5` @ `c628283`.
 1. **`glue/` unblocked for PS4**
    - `glue/CMakeLists.txt`: `REXGLUE_USE_VULKAN` is `OFF` only for PS4 (`ON` stays for the PS5/RADV build), `REXGLUE_ENABLE_FIDELITYFX=OFF`, `LIBERTY_RECOMP_GNM=ON`.
    - `glue/rexglue-sdk-main/CMakeLists.txt`: backend `FATAL_ERROR` relaxed for `LIBERTY_RECOMP_GNM`, added `elseif(PS4)` platform detection (`REX_PLATFORM="ps4-amd64"`, no `ps5_compat.h`).
-   - `src/core/CMakeLists.txt`: real `elseif(PS4)` source list using the existing `memory_ps4.cpp`, `threading_ps4.cpp`, `dynlib_ps4.cpp`, `fiber_ps4.cpp`, `logging_ps4.cpp`, `net_ps4.cpp`, `keyboard_dialog_ps4.cpp`, `ucontext_ps4.c` instead of the POSIX counterparts (avoids duplicate symbols and the `REX_PLATFORM_LINUX` static_assert).
+   - `src/core/CMakeLists.txt`: real `elseif(PS4)` source list using the existing `memory_ps4.cpp`, `threading_ps4.cpp`, `dynlib_ps4.cpp`, `fiber_ps4.cpp`, `logging_ps4.cpp`, `net_ps4.cpp`, `ucontext_ps4.c` instead of the POSIX counterparts (avoids duplicate symbols and the `REX_PLATFORM_LINUX` static_assert). The orphaned `keyboard_dialog_ps4.cpp` is excluded because its `rex/kernel/xam/keyboard_dialog.h` API and frontend are absent from this checkout.
    - `src/input/CMakeLists.txt` + `input_system.cpp`: `ps4/ps4_input_driver.cpp` and a `REX_PLATFORM_PS4` branch in `CreateDefaultInputSystem()`.
    - `src/audio/CMakeLists.txt`: `orbis/orbis_audio_system.cpp` + `orbis_audio_driver.cpp`.
    - `src/graphics/CMakeLists.txt`: `rexgpu-xenos` skipped for PS4 (the `REXGLUE_USE_VULKAN` block with `rexgpu-gta4-native` is skipped automatically).
