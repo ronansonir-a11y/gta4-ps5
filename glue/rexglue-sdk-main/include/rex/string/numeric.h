@@ -26,10 +26,11 @@
 #include <rex/vec128.h>
 
 namespace rex::string::detail_float {
-// [ps5 port] The PS5's libc++ 18 has no floating-point std::from_chars.
+// [console port] The libc++ 18 used by the PS4/PS5 toolchains has no
+// floating-point std::from_chars overload. Use strtod on those targets.
 template <typename T>
 inline std::from_chars_result FloatFromChars(const char* first, const char* last, T& value) {
-#if defined(__PROSPERO__)
+#if defined(__PROSPERO__) || defined(__ORBIS__)
   std::string text(first, last);
   char* end = nullptr;
   errno = 0;
