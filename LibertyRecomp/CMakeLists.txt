@@ -75,7 +75,14 @@ function(BIN2C)
     # actually exists on disk. The generated .c files are committed under
     # LibertyRecomp/res/, so builds without the external LibertyRecompResources
     # tree (now removed) can still link against the pre-generated sources.
-    if(EXISTS "${BIN2C_ARGS_SOURCE_FILE}")
+    # Console cross-compiles do not build the host file_to_c tool, and this tree
+    # does not ship scripts/file_to_c.py, so skip regeneration altogether there
+    # rather than failing with "python3: can't open file ...".
+    set(_BIN2C_CAN_REGENERATE OFF)
+    if(TARGET file_to_c OR EXISTS "${CMAKE_SOURCE_DIR}/scripts/file_to_c.py")
+        set(_BIN2C_CAN_REGENERATE ON)
+    endif()
+    if(EXISTS "${BIN2C_ARGS_SOURCE_FILE}" AND _BIN2C_CAN_REGENERATE)
         if(TARGET file_to_c)
             # Desktop: use the native file_to_c tool
             add_custom_command(OUTPUT "${BIN2C_ARGS_DEST_FILE}.c"
