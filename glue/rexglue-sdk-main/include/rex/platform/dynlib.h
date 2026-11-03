@@ -11,6 +11,10 @@
 
 namespace rex::platform {
 
+// Invalid handle sentinel shared by the platform implementations that encode
+// a module id / handle value instead of using a raw dlopen() pointer.
+inline constexpr void* kInvalidDynamicLibraryHandle = nullptr;
+
 enum class SymbolResolution {
   // Resolve symbols on first use. Maps to RTLD_LAZY on POSIX; the only mode on
   // Windows.
@@ -70,6 +74,15 @@ inline constexpr const char* kSpirvToolsSdkPath = "bin/libSPIRV-Tools-shared.so"
 inline constexpr const char* kVulkanLoader = "libvulkan.1.dylib";
 inline constexpr const char* kRenderDoc = "librenderdoc.dylib";
 inline constexpr const char* kSpirvToolsSdkPath = "lib/libSPIRV-Tools-shared.dylib";
+
+#elif REX_PLATFORM_PS4 || REX_PLATFORM_NX
+
+// Console builds link the renderer / RenderDoc / SPIRV-Tools support
+// statically.  Keep the names defined so the generic UI sources compile;
+// DynamicLibrary::Load() rejects the empty path without attempting a load.
+inline constexpr const char* kVulkanLoader = "";
+inline constexpr const char* kRenderDoc = "";
+inline constexpr const char* kSpirvToolsSdkPath = "";
 
 #else
 #error No library names provided for the target platform.

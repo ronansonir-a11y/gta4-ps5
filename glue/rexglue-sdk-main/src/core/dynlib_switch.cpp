@@ -29,7 +29,8 @@ DynamicLibrary& DynamicLibrary::operator=(DynamicLibrary&& other) noexcept {
   return *this;
 }
 
-bool DynamicLibrary::Load(const std::filesystem::path& path) {
+bool DynamicLibrary::Load(const std::filesystem::path& path,
+                          SymbolResolution /*mode*/) {
   REXLOG_WARN(
       "DynamicLibrary::Load('{}') called on Switch — dynamic loading is not "
       "supported; link this code statically.",

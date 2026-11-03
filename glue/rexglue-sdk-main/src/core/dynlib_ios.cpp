@@ -73,7 +73,8 @@ DynamicLibrary& DynamicLibrary::operator=(DynamicLibrary&& other) noexcept {
   return *this;
 }
 
-bool DynamicLibrary::Load(const std::filesystem::path& path) {
+bool DynamicLibrary::Load(const std::filesystem::path& path,
+                          SymbolResolution /*mode*/) {
   Close();
   if (path.empty()) {
     REXLOG_WARN(

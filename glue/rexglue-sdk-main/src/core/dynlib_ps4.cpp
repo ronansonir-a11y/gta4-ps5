@@ -27,14 +27,14 @@ std::int32_t sceKernelDlsym(std::int32_t handle, const char* symbol, void** addr
 namespace rex::platform {
 
 namespace {
-// Handle encoding for PS4 (DynamicLibraryHandle is uintptr_t per dynlib.h):
+// Handle encoding for PS4 (DynamicLibrary::handle_ is void* per dynlib.h):
 //
 //   bit  63                                    32 31                    0
 //       +---------------------------------------+------------------------+
 //       | kLoadedFlag (1 ULL << 32 when loaded) | module_id (int32 bits) |
 //       +---------------------------------------+------------------------+
 //
-// A handle_ value of exactly 0 (== kInvalidDynamicLibraryHandle) means
+// A handle_ value of exactly nullptr (== kInvalidDynamicLibraryHandle) means
 // "not loaded". The kLoadedFlag bit disambiguates a successful load that
 // returned module_id == 0 from the sentinel. Module IDs are stored in
 // the low 32 bits as their raw two's-complement int32 representation,
@@ -44,11 +44,13 @@ namespace {
 // is guaranteed on every 64-bit PS4 build (orbis-clang targets x86_64).
 constexpr std::uintptr_t kLoadedFlag = static_cast<std::uintptr_t>(1) << 32;
 
-inline std::uintptr_t Encode(std::int32_t module_id) {
-  return kLoadedFlag | static_cast<std::uint32_t>(module_id);
+inline void* Encode(std::int32_t module_id) {
+  return reinterpret_cast<void*>(kLoadedFlag |
+                                static_cast<std::uint32_t>(module_id));
 }
-inline std::int32_t Decode(std::uintptr_t h) {
-  return static_cast<std::int32_t>(static_cast<std::uint32_t>(h & 0xFFFFFFFFu));
+inline std::int32_t Decode(void* h) {
+  return static_cast<std::int32_t>(static_cast<std::uint32_t>(
+      reinterpret_cast<std::uintptr_t>(h) & 0xFFFFFFFFu));
 }
 }  // namespace
 
@@ -68,7 +70,8 @@ DynamicLibrary& DynamicLibrary::operator=(DynamicLibrary&& other) noexcept {
   return *this;
 }
 
-bool DynamicLibrary::Load(const std::filesystem::path& path) {
+bool DynamicLibrary::Load(const std::filesystem::path& path,
+                          SymbolResolution /*mode*/) {
   Close();
   if (path.empty()) {
     return false;
